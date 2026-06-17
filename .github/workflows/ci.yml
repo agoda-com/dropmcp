@@ -44,7 +44,7 @@ jobs:
         run: ruff check src
 
       - name: pytest
-        run: pytest
+        run: timeout 120 pytest
 
   test-ui:
     runs-on: ubuntu-24.04

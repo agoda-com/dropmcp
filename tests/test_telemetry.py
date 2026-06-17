@@ -5,84 +5,12 @@ from __future__ import annotations
 import importlib
 import logging
 import os
-from contextlib import contextmanager
 
 import pytest
 
 from dropmcp.middleware import TelemetryMiddleware
 from dropmcp.telemetry import METRIC_NAMES
-
-
-def _reset_otel_globals() -> None:
-    """Return OTEL globals to no-op providers between tests."""
-    try:
-        from opentelemetry._logs import NoOpLoggerProvider, set_logger_provider
-        from opentelemetry.metrics import NoOpMeterProvider, set_meter_provider
-
-        set_meter_provider(NoOpMeterProvider())
-        set_logger_provider(NoOpLoggerProvider())
-    except Exception:
-        pass
-
-
-def _shutdown_otel_providers() -> None:
-    """Shut down any live OTEL providers to avoid atexit flush timeouts."""
-    try:
-        from opentelemetry import _logs, metrics
-        from opentelemetry.sdk._logs import LoggerProvider
-        from opentelemetry.sdk.metrics import MeterProvider
-
-        import dropmcp.telemetry as telemetry
-
-        mp = metrics.get_meter_provider()
-        if isinstance(mp, MeterProvider):
-            mp.shutdown(timeout_millis=100)
-
-        lp = _logs.get_logger_provider()
-        if isinstance(lp, LoggerProvider):
-            root = logging.getLogger()
-            for h in list(root.handlers):
-                if "LoggingHandler" in type(h).__name__:
-                    root.removeHandler(h)
-            lp.shutdown()
-    except Exception:
-        pass
-    finally:
-        try:
-            import dropmcp.telemetry as telemetry
-
-            telemetry._clear_exit_hooks()
-        except Exception:
-            pass
-        _reset_otel_globals()
-
-
-@contextmanager
-def _fresh_telemetry(monkeypatch):
-    """Reload telemetry with a clean module state."""
-    monkeypatch.delenv("OTEL_EXPORTER_OTLP_ENDPOINT", raising=False)
-    monkeypatch.delenv("OTEL_SERVICE_NAME", raising=False)
-    monkeypatch.delenv(
-        "OTEL_EXPORTER_OTLP_METRICS_TEMPORALITY_PREFERENCE", raising=False
-    )
-    import dropmcp.telemetry as telemetry
-
-    monkeypatch.setattr(telemetry, "_flush_on_exit", lambda *_args, **_kwargs: None)
-    _reset_otel_globals()
-    telemetry._clear_exit_hooks()
-    telemetry._state["configured"] = False
-    telemetry._state["active"] = False
-    telemetry._state["instruments"] = None
-    telemetry._event_logging_configured = False
-    telemetry._event_logger.handlers.clear()
-    yield telemetry
-    telemetry._state["configured"] = False
-    telemetry._state["active"] = False
-    telemetry._state["instruments"] = None
-    telemetry._event_logging_configured = False
-    telemetry._event_logger.handlers.clear()
-    _shutdown_otel_providers()
-
+from otel_test_support import fresh_telemetry
 
 
 class _RecordingInstrument:
@@ -115,13 +43,13 @@ class _RecordingMeter:
 
 
 def test_configure_noop_without_endpoint(monkeypatch):
-    with _fresh_telemetry(monkeypatch) as telemetry:
+    with fresh_telemetry(monkeypatch) as telemetry:
         assert telemetry.configure() is False
         assert telemetry.is_active() is False
 
 
 def test_configure_noop_without_otel_packages(monkeypatch):
-    with _fresh_telemetry(monkeypatch) as telemetry:
+    with fresh_telemetry(monkeypatch) as telemetry:
         monkeypatch.setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://localhost:4318")
 
         def _raise_import(*_args, **_kwargs):
@@ -133,7 +61,7 @@ def test_configure_noop_without_otel_packages(monkeypatch):
 
 
 def test_track_without_otel_logs_but_does_not_export(monkeypatch, caplog):
-    with _fresh_telemetry(monkeypatch) as telemetry:
+    with fresh_telemetry(monkeypatch) as telemetry:
         telemetry.setup_event_logging()
         with caplog.at_level(logging.INFO, logger="dropmcp.events"):
             with telemetry.track("skill", "example"):
@@ -144,7 +72,7 @@ def test_track_without_otel_logs_but_does_not_export(monkeypatch, caplog):
 
 
 def test_log_event_uses_console_when_otel_inactive(monkeypatch, caplog):
-    with _fresh_telemetry(monkeypatch) as telemetry:
+    with fresh_telemetry(monkeypatch) as telemetry:
         telemetry.setup_event_logging()
         with caplog.at_level(logging.INFO, logger="dropmcp.events"):
             telemetry.log_event("skill", "demo", "success", 12.5)
@@ -155,7 +83,7 @@ def test_log_event_uses_console_when_otel_inactive(monkeypatch, caplog):
 
 
 def test_configure_sets_service_name(monkeypatch):
-    with _fresh_telemetry(monkeypatch) as telemetry:
+    with fresh_telemetry(monkeypatch) as telemetry:
         monkeypatch.setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://localhost:4318")
 
         def _stub_setup(service_name: str) -> None:
@@ -178,12 +106,8 @@ def test_configure_sets_service_name(monkeypatch):
     reason="dropmcp[otel] not installed",
 )
 def test_configure_active_with_otel(monkeypatch):
-    with _fresh_telemetry(monkeypatch) as telemetry:
+    with fresh_telemetry(monkeypatch) as telemetry:
         monkeypatch.setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://localhost:4318")
-        # Avoid real OTLP exporters — they register background flush threads that
-        # block pytest for ~20s on teardown when no collector is listening.
-        monkeypatch.setattr(telemetry, "_setup_logging", lambda _resource: None)
-        monkeypatch.setattr(telemetry, "_setup_metrics", lambda _resource, _metrics: None)
 
         assert telemetry.configure(service_name="test-server") is True
         assert telemetry.is_active() is True
@@ -201,7 +125,7 @@ def test_configure_active_with_otel(monkeypatch):
     reason="dropmcp[otel] not installed",
 )
 def test_metric_contract(monkeypatch):
-    with _fresh_telemetry(monkeypatch) as telemetry:
+    with fresh_telemetry(monkeypatch) as telemetry:
         recorder = _RecordingMeter()
         instruments = telemetry._create_instruments(recorder)
 
@@ -273,7 +197,7 @@ def test_build_server_registers_telemetry_middleware(tmp_path, monkeypatch):
     skills.mkdir()
     prompts.mkdir()
 
-    with _fresh_telemetry(monkeypatch) as telemetry:
+    with fresh_telemetry(monkeypatch) as telemetry:
         settings = Settings.resolve(
             skills=skills,
             prompts=prompts,
