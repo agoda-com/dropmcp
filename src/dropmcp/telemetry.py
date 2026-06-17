@@ -72,6 +72,9 @@ _state: dict[str, Any] = {
     "instruments": None,
 }
 
+_shutdown_provider_ids: set[int] = set()
+_atexit_handlers: list[Any] = []
+
 
 def _otel_endpoint_set() -> bool:
     return bool(os.environ.get("OTEL_EXPORTER_OTLP_ENDPOINT"))
@@ -207,10 +210,29 @@ def _service_resource(service_name: str):
 
 
 def _flush_on_exit(provider: Any, label: str) -> None:
-    atexit.register(_safe_shutdown, provider, label)
+    def _handler() -> None:
+        _safe_shutdown(provider, label)
+
+    atexit.register(_handler)
+    _atexit_handlers.append(_handler)
+
+
+def _clear_exit_hooks() -> None:
+    """Drop pending atexit flush hooks (used by tests and explicit shutdown)."""
+    for handler in _atexit_handlers:
+        try:
+            atexit.unregister(handler)
+        except Exception:
+            pass
+    _atexit_handlers.clear()
+    _shutdown_provider_ids.clear()
 
 
 def _safe_shutdown(provider: Any, label: str) -> None:
+    key = id(provider)
+    if key in _shutdown_provider_ids:
+        return
+    _shutdown_provider_ids.add(key)
     try:
         force_flush = getattr(provider, "force_flush", None)
         if callable(force_flush):

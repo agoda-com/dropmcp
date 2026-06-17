@@ -32,6 +32,8 @@ def _shutdown_otel_providers() -> None:
         from opentelemetry.sdk._logs import LoggerProvider
         from opentelemetry.sdk.metrics import MeterProvider
 
+        import dropmcp.telemetry as telemetry
+
         mp = metrics.get_meter_provider()
         if isinstance(mp, MeterProvider):
             mp.shutdown(timeout_millis=100)
@@ -46,6 +48,12 @@ def _shutdown_otel_providers() -> None:
     except Exception:
         pass
     finally:
+        try:
+            import dropmcp.telemetry as telemetry
+
+            telemetry._clear_exit_hooks()
+        except Exception:
+            pass
         _reset_otel_globals()
 
 
@@ -59,7 +67,9 @@ def _fresh_telemetry(monkeypatch):
     )
     import dropmcp.telemetry as telemetry
 
+    monkeypatch.setattr(telemetry, "_flush_on_exit", lambda *_args, **_kwargs: None)
     _reset_otel_globals()
+    telemetry._clear_exit_hooks()
     telemetry._state["configured"] = False
     telemetry._state["active"] = False
     telemetry._state["instruments"] = None
@@ -170,6 +180,11 @@ def test_configure_sets_service_name(monkeypatch):
 def test_configure_active_with_otel(monkeypatch):
     with _fresh_telemetry(monkeypatch) as telemetry:
         monkeypatch.setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://localhost:4318")
+        # Avoid real OTLP exporters — they register background flush threads that
+        # block pytest for ~20s on teardown when no collector is listening.
+        monkeypatch.setattr(telemetry, "_setup_logging", lambda _resource: None)
+        monkeypatch.setattr(telemetry, "_setup_metrics", lambda _resource, _metrics: None)
+
         assert telemetry.configure(service_name="test-server") is True
         assert telemetry.is_active() is True
         assert telemetry.configure() is True
@@ -179,8 +194,6 @@ def test_configure_active_with_otel(monkeypatch):
 
         with telemetry.track("resource", "skill://demo/file", resource_kind="skill"):
             pass
-
-        _shutdown_otel_providers()
 
 
 @pytest.mark.skipif(
