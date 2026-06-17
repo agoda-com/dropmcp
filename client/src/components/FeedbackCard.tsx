@@ -13,7 +13,7 @@ export default function FeedbackCard({
     <article className={styles.card}>
       <CardMeta item={item} />
 
-      <FeedbackField label="Confession" value={item.confession} />
+      <FeedbackField label="Feedback" value={item.feedback} />
       <FeedbackField label="Better instruction" value={item.better_instruction} />
       {item.suggested_skill && <FeedbackField label="Suggested skill" value={item.suggested_skill} />}
 

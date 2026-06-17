@@ -127,6 +127,7 @@ class Settings:
     host: str
     port: int
     ui_enabled: bool
+    feedback_enabled: bool
     reload: bool
     database_url: str
 
@@ -144,6 +145,7 @@ class Settings:
         host: str | None = None,
         port: int | None = None,
         ui_enabled: bool | None = None,
+        feedback_enabled: bool | None = None,
         reload: bool | None = None,
         database_url: str | None = None,
     ) -> "Settings":
@@ -172,6 +174,9 @@ class Settings:
             host=_first(host, _env("DROPMCP_HOST"), DEFAULT_HOST),
             port=int(port_raw),
             ui_enabled=_first(ui_enabled, _env_bool("DROPMCP_UI"), True),
+            feedback_enabled=_first(
+                feedback_enabled, _env_bool("DROPMCP_FEEDBACK"), True
+            ),
             reload=_first(reload, _env_bool("DROPMCP_RELOAD"), False),
             database_url=_resolve_database_url(database_url, skills_dir),
         )

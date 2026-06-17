@@ -121,6 +121,7 @@ default).
 | `host` | `DROPMCP_HOST` | `127.0.0.1` | bind host |
 | `port` | `DROPMCP_PORT` | `8000` | bind port |
 | `ui_enabled` | `DROPMCP_UI` | `true` | serve the catalog HTTP routes |
+| `feedback_enabled` | `DROPMCP_FEEDBACK` | `true` | enable the `record_feedback` tool, feedback HTTP routes, and always-on instructions |
 | `reload` | `DROPMCP_RELOAD` | `false` | re-scan skills/prompts on every request |
 | `database_url` | `DROPMCP_DATABASE_URL` | `sqlite:///<cwd>/dropmcp.db` | feedback database (SQLite file or Postgres URL) |
 
@@ -208,14 +209,16 @@ telemetry is a no-op — no extra imports, no overhead.
 
 dropmcp includes a built-in feedback loop for when agents get corrected:
 
-- **`record_feedback` MCP tool** — agents write structured confessions (no external Slack/GitLab wiring).
+- **`record_feedback` MCP tool** — agents write structured feedback (no external Slack/GitLab wiring).
 - **SQLite by default** — a `dropmcp.db` file is created next to your content folders on first run.
 - **Postgres override** — set `DROPMCP_DATABASE_URL=postgresql://user:pass@host/db` for durable hosted storage.
 - **Feedback UI** — browse, search, filter, and triage at `/feedback` in the catalog SPA (`GET`/`PATCH /api/feedback`).
 
-Privacy guardrails: no verbatim user prompts, code, secrets, or PII. The bundled
-`agent-confessions` example skill describes when and how agents should call
-`record_feedback`.
+Privacy guardrails: no verbatim user prompts, code, secrets, or PII. When feedback
+is enabled, dropmcp injects always-on guidance into the server instructions
+describing when and how agents should call `record_feedback` — no separate skill
+to install. Disable the whole feature (tool, HTTP routes, and instructions) with
+`DROPMCP_FEEDBACK=false`.
 
 In containers, mount a volume over the SQLite file (or use Postgres) or feedback
 is lost when the pod restarts.

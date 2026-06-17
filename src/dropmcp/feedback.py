@@ -42,7 +42,7 @@ FEEDBACK_STATUSES = ("new", "triaged", "actioned")
 class FeedbackEntry:
     id: str
     created_at: str
-    confession: str
+    feedback: str
     better_instruction: str
     suggested_skill: str | None
     model: str
@@ -57,7 +57,7 @@ def feedback_to_dict(entry: FeedbackEntry) -> dict[str, Any]:
     return {
         "id": entry.id,
         "created_at": entry.created_at,
-        "confession": entry.confession,
+        "feedback": entry.feedback,
         "better_instruction": entry.better_instruction,
         "suggested_skill": entry.suggested_skill,
         "model": entry.model,
@@ -80,7 +80,7 @@ def _row_to_entry(row) -> FeedbackEntry:
     return FeedbackEntry(
         id=row.id,
         created_at=created_at,
-        confession=row.confession,
+        feedback=row.feedback,
         better_instruction=row.better_instruction,
         suggested_skill=row.suggested_skill,
         model=row.model,
@@ -103,7 +103,7 @@ class FeedbackStore:
             self._metadata,
             Column("id", String(36), primary_key=True),
             Column("created_at", DateTime(timezone=True), nullable=False),
-            Column("confession", Text, nullable=False),
+            Column("feedback", Text, nullable=False),
             Column("better_instruction", Text, nullable=False),
             Column("suggested_skill", Text),
             Column("model", String(128), nullable=False),
@@ -118,7 +118,7 @@ class FeedbackStore:
     def insert(
         self,
         *,
-        confession: str,
+        feedback: str,
         better_instruction: str,
         model: str,
         suggested_skill: str | None = None,
@@ -133,7 +133,7 @@ class FeedbackStore:
                 insert(self._table).values(
                     id=entry_id,
                     created_at=now,
-                    confession=confession,
+                    feedback=feedback,
                     better_instruction=better_instruction,
                     suggested_skill=suggested_skill,
                     model=model,
@@ -167,7 +167,7 @@ class FeedbackStore:
         if search:
             pattern = f"%{search}%"
             stmt = stmt.where(
-                self._table.c.confession.ilike(pattern)
+                self._table.c.feedback.ilike(pattern)
                 | self._table.c.better_instruction.ilike(pattern)
             )
         with self._engine.connect() as conn:
@@ -212,13 +212,13 @@ class FeedbackStore:
 _RECORD_FEEDBACK_DESCRIPTION = (
     "Record structured agent feedback when the user corrects your output. "
     "Do not include verbatim user prompts, code, secrets, PII, or customer data. "
-    "Keep confession and better_instruction brief and paraphrased."
+    "Keep feedback and better_instruction brief and paraphrased."
 )
 
 _RECORD_FEEDBACK_PARAMETERS = {
     "type": "object",
     "properties": {
-        "confession": {
+        "feedback": {
             "type": "string",
             "description": "What went wrong, in one sentence.",
         },
@@ -245,7 +245,7 @@ _RECORD_FEEDBACK_PARAMETERS = {
             "description": "Optional high-level repo context (no full paths).",
         },
     },
-    "required": ["confession", "better_instruction", "model"],
+    "required": ["feedback", "better_instruction", "model"],
 }
 
 
@@ -266,16 +266,16 @@ class RecordFeedbackTool(Tool):
 
     async def run(self, arguments: dict[str, Any]) -> ToolResult:
         with track("skill", "record_feedback"):
-            confession = str(arguments.get("confession", "")).strip()
+            feedback = str(arguments.get("feedback", "")).strip()
             better_instruction = str(arguments.get("better_instruction", "")).strip()
             model = str(arguments.get("model", "")).strip() or "unknown"
-            if not confession or not better_instruction:
+            if not feedback or not better_instruction:
                 return ToolResult(
                     content=[
                         TextContent(
                             type="text",
                             text=(
-                                "Feedback not recorded: confession and "
+                                "Feedback not recorded: feedback and "
                                 "better_instruction are required."
                             ),
                         )
@@ -287,7 +287,7 @@ class RecordFeedbackTool(Tool):
             repo = arguments.get("repo")
             try:
                 entry_id = self._store.insert(
-                    confession=confession,
+                    feedback=feedback,
                     better_instruction=better_instruction,
                     model=model,
                     suggested_skill=str(suggested_skill).strip()

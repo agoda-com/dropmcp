@@ -43,6 +43,7 @@ def create_server(
     host: str | None = None,
     port: int | None = None,
     ui_enabled: bool | None = None,
+    feedback_enabled: bool | None = None,
     reload: bool | None = None,
     database_url: str | None = None,
 ) -> FastMCP:
@@ -63,6 +64,7 @@ def create_server(
         host=host,
         port=port,
         ui_enabled=ui_enabled,
+        feedback_enabled=feedback_enabled,
         reload=reload,
         database_url=database_url,
     )
@@ -81,6 +83,7 @@ def run(
     host: str | None = None,
     port: int | None = None,
     ui_enabled: bool | None = None,
+    feedback_enabled: bool | None = None,
     reload: bool | None = None,
     database_url: str | None = None,
 ) -> None:
@@ -101,6 +104,7 @@ def run(
         host=host,
         port=port,
         ui_enabled=ui_enabled,
+        feedback_enabled=feedback_enabled,
         reload=reload,
         database_url=database_url,
     )

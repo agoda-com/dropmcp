@@ -5,7 +5,7 @@ export const FEEDBACK_STATUSES: FeedbackStatus[] = ['new', 'triaged', 'actioned'
 export interface FeedbackItem {
   id: string;
   created_at: string;
-  confession: string;
+  feedback: string;
   better_instruction: string;
   suggested_skill: string | null;
   model: string;

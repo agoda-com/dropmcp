@@ -59,7 +59,7 @@ export const MOCK_FEEDBACK: FeedbackItem[] = [
   {
     id: 'fb-1',
     created_at: '2026-06-17 10:00',
-    confession: 'I edited a test to make it pass instead of fixing the code.',
+    feedback: 'I edited a test to make it pass instead of fixing the code.',
     better_instruction: 'Never modify existing passing tests to mask a regression.',
     suggested_skill: null,
     model: 'claude-opus-4',
@@ -72,7 +72,7 @@ export const MOCK_FEEDBACK: FeedbackItem[] = [
   {
     id: 'fb-2',
     created_at: '2026-06-16 14:30',
-    confession: 'I inlined a giant component instead of splitting it.',
+    feedback: 'I inlined a giant component instead of splitting it.',
     better_instruction: 'Mirror the UI layout by extracting named section components.',
     suggested_skill: 'react-component-layout',
     model: 'gpt-5',
@@ -85,7 +85,7 @@ export const MOCK_FEEDBACK: FeedbackItem[] = [
   {
     id: 'fb-3',
     created_at: '2026-06-15 09:15',
-    confession: 'I used a Date object in browser code.',
+    feedback: 'I used a Date object in browser code.',
     better_instruction: 'Format dates to strings on the server before sending to the browser.',
     suggested_skill: null,
     model: 'claude-opus-4',

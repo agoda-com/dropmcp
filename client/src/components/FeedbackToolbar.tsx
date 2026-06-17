@@ -53,7 +53,7 @@ function SearchField({ value, onChange }: { value: string; onChange: (value: str
       <input
         type="search"
         className={styles.searchInput}
-        placeholder="Search confession or better instruction…"
+        placeholder="Search feedback or better instruction…"
         value={value}
         onChange={(e) => onChange(e.target.value)}
       />

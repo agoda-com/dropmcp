@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import logging
 import re
+from importlib import resources
 from pathlib import Path
 
 import yaml
@@ -27,6 +28,13 @@ log = logging.getLogger(__name__)
 
 SKILLS_PLACEHOLDER = "{{INSTRUCTION_SUMMARIES}}"
 PROMPTS_PLACEHOLDER = "{{PROMPT_SUMMARIES}}"
+FEEDBACK_SECTION_RESOURCE = "feedback_instructions.md"
+
+
+def _feedback_section() -> str:
+    """The always-on feedback guidance packaged with dropmcp."""
+    path = Path(resources.files("dropmcp") / FEEDBACK_SECTION_RESOURCE)
+    return path.read_text(encoding="utf-8").strip()
 
 _FRONTMATTER_RE = re.compile(r"^---\s*\n(.*?)\n---\s*\n", re.DOTALL)
 
@@ -88,17 +96,26 @@ def build_server_instructions(
     template_path: Path,
     skills_dir: Path,
     prompts_dir: Path,
+    *,
+    feedback_enabled: bool = False,
 ) -> str | None:
     """Read `INSTRUCTIONS.md` and substitute the summaries placeholders.
 
     `{{INSTRUCTION_SUMMARIES}}` is replaced with a bullet list of skill
     `instruction_summary` values; `{{PROMPT_SUMMARIES}}` is replaced with the
-    same for prompts. Returns None if the template file is missing so callers
-    can pass `None` through to FastMCP (which treats it as "no instructions").
+    same for prompts. When ``feedback_enabled`` is set, the always-on feedback
+    guidance is appended as its own section. Returns None when there is no
+    template and feedback is disabled, so callers can pass `None` through to
+    FastMCP (which treats it as "no instructions").
     """
-    if not template_path.exists():
-        return None
-    template = template_path.read_text(encoding="utf-8").strip()
+    template = (
+        template_path.read_text(encoding="utf-8").strip()
+        if template_path.exists()
+        else None
+    )
+
+    if template is None:
+        return _feedback_section() if feedback_enabled else None
 
     if SKILLS_PLACEHOLDER in template:
         template = template.replace(
@@ -117,5 +134,8 @@ def build_server_instructions(
                 "_(no prompts have declared an instruction_summary yet)_",
             ),
         )
+
+    if feedback_enabled:
+        template = f"{template}\n\n{_feedback_section()}"
 
     return template

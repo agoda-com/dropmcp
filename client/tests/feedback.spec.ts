@@ -25,7 +25,7 @@ function filterFeedback(items: FeedbackItem[], query: URLSearchParams): Feedback
     if (model && item.model !== model) return false;
     if (client && item.client !== client) return false;
     if (search) {
-      const haystack = `${item.confession} ${item.better_instruction}`.toLowerCase();
+      const haystack = `${item.feedback} ${item.better_instruction}`.toLowerCase();
       if (!haystack.includes(search)) return false;
     }
     return true;

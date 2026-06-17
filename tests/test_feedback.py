@@ -19,12 +19,12 @@ def store(tmp_path):
 
 def test_insert_and_list(store):
     entry_id = store.insert(
-        confession="Used bespoke cache instead of CacheAside.",
+        feedback="Used bespoke cache instead of CacheAside.",
         better_instruction="Prefer CacheAside<T> from Agoda.Caching.",
         model="claude-opus-4.8",
         suggested_skill="csharp-caching-cacheaside",
         client="cursor",
-        skill_name="agent-confessions",
+        skill_name="agent-feedback",
         repo="supply BFF",
     )
     assert entry_id
@@ -33,21 +33,21 @@ def test_insert_and_list(store):
     assert len(items) == 1
     item = items[0]
     assert item.id == entry_id
-    assert item.confession.startswith("Used bespoke")
+    assert item.feedback.startswith("Used bespoke")
     assert item.status == "new"
     assert item.client == "cursor"
-    assert item.skill_name == "agent-confessions"
+    assert item.skill_name == "agent-feedback"
 
 
 def test_list_search_filter(store):
     store.insert(
-        confession="Missed null branch tests.",
+        feedback="Missed null branch tests.",
         better_instruction="Ship tests for each branch.",
         model="gpt-5.3-codex",
         client="cursor",
     )
     store.insert(
-        confession="Wrong DI pattern.",
+        feedback="Wrong DI pattern.",
         better_instruction="Use Agoda.IoC attributes.",
         model="claude-opus-4.8",
         client="claude-cli",
@@ -61,7 +61,7 @@ def test_list_search_filter(store):
 
 def test_patch_status_and_resolution(store):
     entry_id = store.insert(
-        confession="Forgot tests.",
+        feedback="Forgot tests.",
         better_instruction="Add tests with code changes.",
         model="unknown",
     )
@@ -81,7 +81,7 @@ def test_patch_status_and_resolution(store):
 
 def test_patch_invalid_status_raises(store):
     entry_id = store.insert(
-        confession="x",
+        feedback="x",
         better_instruction="y",
         model="m",
     )
@@ -95,7 +95,7 @@ def test_patch_missing_returns_none(store):
 
 def test_feedback_to_dict_iso_dates(store):
     entry_id = store.insert(
-        confession="a",
+        feedback="a",
         better_instruction="b",
         model="m",
     )
@@ -114,7 +114,7 @@ async def test_record_feedback_tool_writes_row(store):
 
     result = await tool.run(
         {
-            "confession": "Skipped branch tests.",
+            "feedback": "Skipped branch tests.",
             "better_instruction": "Cover each branch in the same change.",
             "model": "composer-2.5",
             "suggested_skill": "tests-cover-branches",
@@ -128,7 +128,7 @@ async def test_record_feedback_tool_writes_row(store):
 async def test_record_feedback_tool_missing_fields(store):
     provider = FeedbackProvider(store)
     tool = await provider._get_tool("record_feedback")
-    result = await tool.run({"confession": "only one field"})
+    result = await tool.run({"feedback": "only one field"})
     assert "not recorded" in result.content[0].text.lower()
     assert store.list() == []
 

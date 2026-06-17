@@ -79,6 +79,7 @@ def build_server(settings: Settings) -> FastMCP:
         settings.instructions_path,
         settings.skills_dir,
         settings.prompts_dir,
+        feedback_enabled=settings.feedback_enabled,
     )
 
     mcp = FastMCP(
@@ -102,8 +103,11 @@ def build_server(settings: Settings) -> FastMCP:
         )
     )
 
-    feedback_store = FeedbackStore(settings.database_url)
-    mcp.add_provider(FeedbackProvider(feedback_store))
+    feedback_store = (
+        FeedbackStore(settings.database_url) if settings.feedback_enabled else None
+    )
+    if feedback_store is not None:
+        mcp.add_provider(FeedbackProvider(feedback_store))
 
     if settings.ui_enabled:
         _register_catalog_routes(mcp, settings, feedback_store)
@@ -112,7 +116,7 @@ def build_server(settings: Settings) -> FastMCP:
 
 
 def _register_catalog_routes(
-    mcp: FastMCP, settings: Settings, feedback_store: FeedbackStore
+    mcp: FastMCP, settings: Settings, feedback_store: FeedbackStore | None
 ) -> None:
     defaults_dir = settings.catalog_defaults_dir or (settings.skills_dir.parent / "_none")
     catalog = CatalogProvider(
@@ -216,7 +220,8 @@ def _register_catalog_routes(
             return JSONResponse({"error": "not found"}, status_code=404)
         return _file_response(path)
 
-    _register_feedback_routes(mcp, feedback_store)
+    if feedback_store is not None:
+        _register_feedback_routes(mcp, feedback_store)
 
     @mcp.custom_route("/", methods=["GET"])
     async def catalog_ui(request: Request) -> HTMLResponse:
