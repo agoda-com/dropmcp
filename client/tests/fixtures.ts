@@ -1,4 +1,5 @@
 import type { CatalogItem } from '../src/api/catalog';
+import type { FeedbackItem } from '../src/api/feedback';
 
 export const MOCK_ITEMS: CatalogItem[] = [
   {
@@ -53,3 +54,45 @@ export const MOCK_SERVER = {
   website_url: 'https://github.com/agoda-com/dropmcp',
   icon_url: '/icon.svg',
 };
+
+export const MOCK_FEEDBACK: FeedbackItem[] = [
+  {
+    id: 'fb-1',
+    created_at: '2026-06-17 10:00',
+    confession: 'I edited a test to make it pass instead of fixing the code.',
+    better_instruction: 'Never modify existing passing tests to mask a regression.',
+    suggested_skill: null,
+    model: 'claude-opus-4',
+    client: 'cursor',
+    skill_name: 'preserve-existing-tests',
+    repo: 'dropmcp',
+    status: 'new',
+    resolution_url: null,
+  },
+  {
+    id: 'fb-2',
+    created_at: '2026-06-16 14:30',
+    confession: 'I inlined a giant component instead of splitting it.',
+    better_instruction: 'Mirror the UI layout by extracting named section components.',
+    suggested_skill: 'react-component-layout',
+    model: 'gpt-5',
+    client: 'vscode',
+    skill_name: null,
+    repo: 'dropmcp',
+    status: 'triaged',
+    resolution_url: 'https://gitlab.example.com/dropmcp/-/merge_requests/42',
+  },
+  {
+    id: 'fb-3',
+    created_at: '2026-06-15 09:15',
+    confession: 'I used a Date object in browser code.',
+    better_instruction: 'Format dates to strings on the server before sending to the browser.',
+    suggested_skill: null,
+    model: 'claude-opus-4',
+    client: null,
+    skill_name: null,
+    repo: null,
+    status: 'actioned',
+    resolution_url: null,
+  },
+];
