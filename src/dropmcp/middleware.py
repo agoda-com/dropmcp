@@ -52,10 +52,8 @@ class TelemetryMiddleware(Middleware):
     """Records counters and structured logs for MCP protocol events."""
 
     async def on_initialize(self, context: MiddlewareContext, call_next):
-        client_attrs: dict[str, Any] = {"client": client_bucket()}
         info = _client_info(context)
-        if "client_name" in info:
-            client_attrs["client"] = info["client_name"]
+        client = info.get("client_name", client_bucket())
 
         start = time.perf_counter()
         outcome = "success"
@@ -69,7 +67,7 @@ class TelemetryMiddleware(Middleware):
             record_mcp_initialization(
                 outcome=outcome,
                 duration_ms=duration_ms,
-                client=client_attrs["client"],
+                client=client,
                 **info,
             )
 

@@ -25,7 +25,7 @@ from dropmcp.instructions import build_server_instructions
 from dropmcp.middleware import TelemetryMiddleware
 from dropmcp.prompts import PromptsDirectoryProvider
 from dropmcp.skills import FilteredSkillsProvider
-from dropmcp.telemetry import configure, setup_event_logging
+from dropmcp.telemetry import configure
 
 SUPPORTING_FILES = "resources"
 
@@ -77,7 +77,6 @@ def _file_response(path: Path) -> FileResponse:
 
 
 def build_server(settings: Settings) -> FastMCP:
-    setup_event_logging()
     configure(service_name=settings.name)
 
     instructions = build_server_instructions(
