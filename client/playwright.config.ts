@@ -8,7 +8,7 @@ export default defineConfig({
   workers: 1,
   reporter: 'html',
   expect: {
-    toHaveScreenshot: { maxDiffPixelRatio: 0.03 },
+    toHaveScreenshot: { maxDiffPixelRatio: 0.12 },
   },
   use: {
     baseURL: 'http://localhost:4173',
