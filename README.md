@@ -1,4 +1,8 @@
-# Drop Mcp
+<div align="center">
+  <img src="src/dropmcp/static/icon.svg" alt="Drop MCP Logo" width="120" />
+</div>
+
+# Drop MCP
 
 Drop a `skills/` and `prompts/` folder, get a [FastMCP](https://gofastmcp.com)
 server — with a browseable catalog — in one line.
