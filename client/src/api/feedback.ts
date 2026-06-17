@@ -1,5 +1,7 @@
 export type FeedbackStatus = 'new' | 'triaged' | 'actioned';
 
+export const FEEDBACK_STATUSES: FeedbackStatus[] = ['new', 'triaged', 'actioned'];
+
 export interface FeedbackItem {
   id: string;
   created_at: string;
