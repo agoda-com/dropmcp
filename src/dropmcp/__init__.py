@@ -92,6 +92,9 @@ def run(
     feedback_enabled: bool | None = None,
     reload: bool | None = None,
     database_url: str | None = None,
+    eval_results_project: str | None = None,
+    eval_results_commit_sha: str | None = None,
+    eval_results_store=None,
 ) -> None:
     """Build the server and serve it over streamable-HTTP.
 
