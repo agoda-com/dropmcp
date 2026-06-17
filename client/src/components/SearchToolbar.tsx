@@ -1,3 +1,4 @@
+import { formatName } from '../utils/format';
 import styles from './SearchToolbar.module.css';
 
 interface Props {
@@ -8,13 +9,6 @@ interface Props {
   categories: string[];
   categoryFilter: string | null;
   onCategoryChange: (cat: string | null) => void;
-}
-
-function formatName(kebab: string): string {
-  return kebab
-    .split('-')
-    .map((w) => (w.length ? w.charAt(0).toUpperCase() + w.slice(1).toLowerCase() : ''))
-    .join(' ');
 }
 
 export default function SearchToolbar({

@@ -3,6 +3,7 @@ import { useCatalog } from '../context/CatalogContext';
 import InstallPanel from '../components/InstallPanel';
 import SearchToolbar from '../components/SearchToolbar';
 import CatalogGrid, { SkeletonGrid, EmptyState, ErrorState } from '../components/CatalogGrid';
+import type { CatalogItem } from '../api/catalog';
 import styles from './CatalogPage.module.css';
 
 export default function CatalogPage() {
@@ -33,6 +34,7 @@ export default function CatalogPage() {
   return (
     <main className={styles.main}>
       <InstallPanel />
+
       <SearchToolbar
         search={search}
         onSearchChange={setSearch}
@@ -42,16 +44,40 @@ export default function CatalogPage() {
         categoryFilter={categoryFilter}
         onCategoryChange={setCategoryFilter}
       />
-      {loading && <SkeletonGrid />}
-      {error && <ErrorState message={error} />}
-      {!loading && !error && filtered.length === 0 && items.length > 0 && <EmptyState />}
-      {!loading && !error && items.length === 0 && (
-        <div className={styles.emptyWrap}>
-          <h2>Catalog is empty</h2>
-          <p>No skills or prompts are available yet.</p>
-        </div>
-      )}
-      {!loading && !error && filtered.length > 0 && <CatalogGrid items={filtered} />}
+
+      <CatalogContent
+        loading={loading}
+        error={error}
+        items={items}
+        filtered={filtered}
+      />
     </main>
+  );
+}
+
+function CatalogContent({
+  loading,
+  error,
+  items,
+  filtered,
+}: {
+  loading: boolean;
+  error: string | null;
+  items: CatalogItem[];
+  filtered: CatalogItem[];
+}) {
+  if (loading) return <SkeletonGrid />;
+  if (error) return <ErrorState message={error} />;
+  if (items.length === 0) return <EmptyCatalog />;
+  if (filtered.length === 0) return <EmptyState />;
+  return <CatalogGrid items={filtered} />;
+}
+
+function EmptyCatalog() {
+  return (
+    <div className={styles.emptyWrap}>
+      <h2>Catalog is empty</h2>
+      <p>No skills or prompts are available yet.</p>
+    </div>
   );
 }
