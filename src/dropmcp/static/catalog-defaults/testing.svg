@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" width="400" height="300">
+  <rect width="400" height="300" fill="#f8fafc" rx="14" ry="14"/>
+  <g fill="none" stroke="#16a34a" stroke-width="2.5" stroke-linejoin="round" transform="translate(200,108)">
+    <path d="M-20-30h40v10l-12 12v28h-16v-28l-12-12z"/>
+    <circle cx="0" cy="30" r="6" fill="#16a34a" opacity=".3"/>
+    <path d="M-8 8l6 6 14-14" stroke-linecap="round"/>
+  </g>
+  <text x="200" y="218" text-anchor="middle" font-family="system-ui,-apple-system,sans-serif" font-size="15" font-weight="600" fill="#64748b">Testing</text>
+</svg>

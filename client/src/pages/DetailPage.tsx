@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { fetchCatalogItem, type CatalogItem } from '../api/catalog';
 import ScreenshotGallery from '../components/ScreenshotGallery';
+import TelemetryPanel from '../components/TelemetryPanel';
 import { ErrorState } from '../components/CatalogGrid';
 import { formatName } from '../utils/format';
 import styles from './DetailPage.module.css';
@@ -66,6 +67,8 @@ export default function DetailPage() {
         {examples.length > 0 && (
           <ExamplesSection examples={examples} />
         )}
+
+        <TelemetryPanel itemName={item.name} />
       </div>
     </main>
   );

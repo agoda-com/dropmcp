@@ -16,6 +16,10 @@ import os
 from dataclasses import dataclass
 from importlib import resources
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from dropmcp.eval_results import EvalResultsStore
 
 _TRUE = {"1", "true", "yes", "on"}
 _FALSE = {"0", "false", "no", "off"}
@@ -28,7 +32,9 @@ DEFAULT_PORT = 8000
 INSTRUCTIONS_FILENAME = "INSTRUCTIONS.md"
 DEFAULT_INSTRUCTIONS_RESOURCE = "INSTRUCTIONS.default.md"
 DEFAULT_ICON_RESOURCE = "static/icon.svg"
+DEFAULT_CATALOG_DEFAULTS_RESOURCE = "static/catalog-defaults"
 DEFAULT_DATABASE_FILENAME = "dropmcp.db"
+COMMIT_SHA_FILENAME = "COMMIT_SHA"
 
 
 def _env(name: str) -> str | None:
@@ -61,6 +67,29 @@ def _packaged_default_instructions() -> Path:
 
 def _packaged_default_icon() -> Path:
     return Path(resources.files("dropmcp") / DEFAULT_ICON_RESOURCE)
+
+
+def _packaged_catalog_defaults() -> Path:
+    return Path(resources.files("dropmcp") / DEFAULT_CATALOG_DEFAULTS_RESOURCE)
+
+
+def _resolve_commit_sha(
+    explicit: str | None,
+    skills_dir: Path,
+) -> str | None:
+    chosen = _first(explicit, _env("DROPMCP_EVAL_RESULTS_COMMIT_SHA"))
+    if chosen is not None:
+        return chosen
+
+    for candidate in (
+        Path("/app") / COMMIT_SHA_FILENAME,
+        Path.cwd() / COMMIT_SHA_FILENAME,
+        skills_dir.parent / COMMIT_SHA_FILENAME,
+    ):
+        if candidate.is_file():
+            return candidate.read_text(encoding="utf-8").strip()
+
+    return None
 
 
 def _resolve_instructions_path(
@@ -126,7 +155,7 @@ def _resolve_icon_path(
 class Settings:
     skills_dir: Path
     prompts_dir: Path
-    catalog_defaults_dir: Path | None
+    catalog_defaults_dir: Path
     instructions_path: Path
     name: str
     website_url: str | None
@@ -137,6 +166,9 @@ class Settings:
     feedback_enabled: bool
     reload: bool
     database_url: str
+    eval_results_project: str | None
+    eval_results_commit_sha: str | None
+    eval_results_store: EvalResultsStore | None
 
     @classmethod
     def resolve(
@@ -155,6 +187,9 @@ class Settings:
         feedback_enabled: bool | None = None,
         reload: bool | None = None,
         database_url: str | None = None,
+        eval_results_project: str | None = None,
+        eval_results_commit_sha: str | None = None,
+        eval_results_store: EvalResultsStore | None = None,
     ) -> "Settings":
         skills_dir = Path(
             _first(skills, _env("DROPMCP_SKILLS"), DEFAULT_SKILLS_DIR)
@@ -165,7 +200,9 @@ class Settings:
 
         catalog_defaults_raw = _first(catalog_defaults, _env("DROPMCP_CATALOG_DEFAULTS"))
         catalog_defaults_dir = (
-            Path(catalog_defaults_raw) if catalog_defaults_raw is not None else None
+            Path(catalog_defaults_raw)
+            if catalog_defaults_raw is not None
+            else _packaged_catalog_defaults()
         )
 
         port_raw = _first(port, _env("DROPMCP_PORT"), DEFAULT_PORT)
@@ -186,4 +223,11 @@ class Settings:
             ),
             reload=_first(reload, _env_bool("DROPMCP_RELOAD"), False),
             database_url=_resolve_database_url(database_url, skills_dir),
+            eval_results_project=_first(
+                eval_results_project, _env("DROPMCP_EVAL_RESULTS_PROJECT")
+            ),
+            eval_results_commit_sha=_resolve_commit_sha(
+                eval_results_commit_sha, skills_dir
+            ),
+            eval_results_store=eval_results_store,
         )

@@ -124,6 +124,9 @@ default).
 | `feedback_enabled` | `DROPMCP_FEEDBACK` | `true` | enable the `record_feedback` tool, feedback HTTP routes, and always-on instructions |
 | `reload` | `DROPMCP_RELOAD` | `false` | re-scan skills/prompts on every request |
 | `database_url` | `DROPMCP_DATABASE_URL` | `sqlite:///<cwd>/dropmcp.db` | feedback database (SQLite file or Postgres URL) |
+| `eval_results_project` | `DROPMCP_EVAL_RESULTS_PROJECT` | – | GitLab project path for E2E eval results (enables `/api/telemetry` when a store is available) |
+| `eval_results_commit_sha` | `DROPMCP_EVAL_RESULTS_COMMIT_SHA` | `COMMIT_SHA` file | deployed commit to filter eval results |
+| `catalog_defaults` | `DROPMCP_CATALOG_DEFAULTS` | bundled SVGs | category thumbnail fallbacks for the catalog grid |
 
 If an `INSTRUCTIONS.md` sits next to your content folders it is picked up
 automatically; otherwise a generic default ships with the package. The
@@ -229,6 +232,27 @@ to install. Disable the whole feature (tool, HTTP routes, and instructions) with
 
 In containers, mount a volume over the SQLite file (or use Postgres) or feedback
 is lost when the pod restarts.
+
+## E2E eval results (telemetry panel)
+
+The catalog detail page includes an **E2E Test Results** panel (ported from
+skills-mcp) showing per-skill Promptfoo eval scores from your CI pipeline.
+
+Eval results are **pluggable** — dropmcp ships the UI and HTTP routes, but the
+data source is optional so the library stays deployment-agnostic:
+
+- Pass an `eval_results_store` to `create_server()` (any object implementing
+  `get_results_for_skill` / `get_all_latest_results`), **or**
+- Set `DROPMCP_EVAL_RESULTS_PROJECT` and install the StarRocks extra:
+
+  ```bash
+  pip install "dropmcp[starrocks]"
+  export DROPMCP_EVAL_RESULTS_PROJECT="full-stack/agents/skills-mcp"
+  export DROPMCP_EVAL_RESULTS_COMMIT_SHA="$(cat COMMIT_SHA)"
+  ```
+
+When no store is configured the panel renders an empty state; routes are not
+registered. This keeps StarRocks / Fleet JWT coupling out of the base package.
 
 ## Skill and prompt format
 

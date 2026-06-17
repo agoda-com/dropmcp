@@ -46,6 +46,9 @@ def create_server(
     feedback_enabled: bool | None = None,
     reload: bool | None = None,
     database_url: str | None = None,
+    eval_results_project: str | None = None,
+    eval_results_commit_sha: str | None = None,
+    eval_results_store=None,
 ) -> FastMCP:
     """Build and return a configured `FastMCP` server without running it.
 
@@ -67,6 +70,9 @@ def create_server(
         feedback_enabled=feedback_enabled,
         reload=reload,
         database_url=database_url,
+        eval_results_project=eval_results_project,
+        eval_results_commit_sha=eval_results_commit_sha,
+        eval_results_store=eval_results_store,
     )
     return build_server(settings)
 
@@ -107,6 +113,9 @@ def run(
         feedback_enabled=feedback_enabled,
         reload=reload,
         database_url=database_url,
+        eval_results_project=eval_results_project,
+        eval_results_commit_sha=eval_results_commit_sha,
+        eval_results_store=eval_results_store,
     )
     mcp = build_server(settings)
 
