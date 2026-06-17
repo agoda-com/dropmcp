@@ -44,9 +44,6 @@ Homepage = "https://github.com/agoda-com/dropmcp"
 Repository = "https://github.com/agoda-com/dropmcp"
 Issues = "https://github.com/agoda-com/dropmcp/issues"
 
-[project.scripts]
-dropmcp = "dropmcp.cli:main"
-
 [tool.hatch.build.targets.wheel]
 packages = ["src/dropmcp"]
 

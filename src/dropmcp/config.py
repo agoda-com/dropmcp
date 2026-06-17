@@ -5,6 +5,9 @@ resolved in priority order: explicit keyword arguments, then environment
 variables (`DROPMCP_*`), then sensible defaults. This keeps the one-liner
 (`dropmcp.run(skills="skills", prompts="prompts")`) ergonomic while letting
 hosted deployments override anything via the environment.
+
+dropmcp serves over streamable-HTTP only — it exists to *share* skills with
+multiple remote clients, so there is no local stdio transport to configure.
 """
 
 from __future__ import annotations
@@ -20,7 +23,6 @@ _FALSE = {"0", "false", "no", "off"}
 DEFAULT_NAME = "dropmcp"
 DEFAULT_SKILLS_DIR = "skills"
 DEFAULT_PROMPTS_DIR = "prompts"
-DEFAULT_TRANSPORT = "stdio"
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8000
 INSTRUCTIONS_FILENAME = "INSTRUCTIONS.md"
@@ -104,7 +106,6 @@ class Settings:
     name: str
     website_url: str | None
     icon: Path
-    transport: str
     host: str
     port: int
     ui_enabled: bool
@@ -121,7 +122,6 @@ class Settings:
         name: str | None = None,
         website_url: str | None = None,
         icon: str | Path | None = None,
-        transport: str | None = None,
         host: str | None = None,
         port: int | None = None,
         ui_enabled: bool | None = None,
@@ -149,7 +149,6 @@ class Settings:
             name=_first(name, _env("DROPMCP_NAME"), DEFAULT_NAME),
             website_url=_first(website_url, _env("DROPMCP_WEBSITE_URL")),
             icon=_resolve_icon_path(icon, skills_dir),
-            transport=_first(transport, _env("DROPMCP_TRANSPORT"), DEFAULT_TRANSPORT),
             host=_first(host, _env("DROPMCP_HOST"), DEFAULT_HOST),
             port=int(port_raw),
             ui_enabled=_first(ui_enabled, _env_bool("DROPMCP_UI"), True),

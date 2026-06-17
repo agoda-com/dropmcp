@@ -9,7 +9,10 @@ Or grab the server to add your own routes/middleware first::
 
     mcp = dropmcp.create_server(skills="skills", prompts="prompts")
     # ... customise ...
-    mcp.run(transport="stdio")
+    mcp.run(transport="streamable-http", host="0.0.0.0", port=8000)
+
+dropmcp serves over streamable-HTTP only — it exists to *share* skills with
+remote clients, not to run locally over stdio.
 """
 
 from __future__ import annotations
@@ -25,7 +28,6 @@ __all__ = ["create_server", "run", "Settings"]
 
 __version__ = "0.1.0"
 
-# FastMCP's transport name for hosted HTTP; we accept the friendly "http" alias.
 _HTTP_TRANSPORT = "streamable-http"
 
 
@@ -38,7 +40,6 @@ def create_server(
     name: str | None = None,
     website_url: str | None = None,
     icon: str | Path | None = None,
-    transport: str | None = None,
     host: str | None = None,
     port: int | None = None,
     ui_enabled: bool | None = None,
@@ -58,7 +59,6 @@ def create_server(
         name=name,
         website_url=website_url,
         icon=icon,
-        transport=transport,
         host=host,
         port=port,
         ui_enabled=ui_enabled,
@@ -76,16 +76,16 @@ def run(
     name: str | None = None,
     website_url: str | None = None,
     icon: str | Path | None = None,
-    transport: str | None = None,
     host: str | None = None,
     port: int | None = None,
     ui_enabled: bool | None = None,
     reload: bool | None = None,
 ) -> None:
-    """Build the server and serve it over the configured transport.
+    """Build the server and serve it over streamable-HTTP.
 
-    `transport` accepts ``"stdio"`` (default, for local Cursor/Claude
-    Desktop) or ``"http"`` / ``"streamable-http"`` (for hosted use).
+    Bind address is controlled by ``host``/``port`` (or ``DROPMCP_HOST`` /
+    ``DROPMCP_PORT``). The catalog UI is served at ``/`` and the MCP endpoint
+    at ``/mcp``.
     """
     settings = Settings.resolve(
         skills=skills,
@@ -95,7 +95,6 @@ def run(
         name=name,
         website_url=website_url,
         icon=icon,
-        transport=transport,
         host=host,
         port=port,
         ui_enabled=ui_enabled,
@@ -103,12 +102,9 @@ def run(
     )
     mcp = build_server(settings)
 
-    if settings.transport in ("http", _HTTP_TRANSPORT):
-        mcp.run(
-            transport=_HTTP_TRANSPORT,
-            host=settings.host,
-            port=settings.port,
-            stateless_http=True,
-        )
-    else:
-        mcp.run(transport=settings.transport)
+    mcp.run(
+        transport=_HTTP_TRANSPORT,
+        host=settings.host,
+        port=settings.port,
+        stateless_http=True,
+    )

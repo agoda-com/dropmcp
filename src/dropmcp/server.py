@@ -2,8 +2,8 @@
 
 Wires the skills + prompts providers, the aggregated instructions, and the
 always-on catalog HTTP API plus the browseable React SPA shipped in the wheel.
-Everything funnels through `build_server`, which both the public
-`create_server` / `run` API and the CLI call.
+Everything funnels through `build_server`, which the public
+`create_server` / `run` API calls.
 """
 
 from __future__ import annotations

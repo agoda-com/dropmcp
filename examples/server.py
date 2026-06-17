@@ -1,12 +1,11 @@
 """Minimal dropmcp server.
 
-Run locally over stdio (for Cursor / Claude Desktop)::
+Serve over streamable-HTTP::
 
     python examples/server.py
 
-Or serve over HTTP::
-
-    DROPMCP_TRANSPORT=http python examples/server.py
+The catalog UI is at http://127.0.0.1:8000/ and the MCP endpoint at /mcp.
+Override the bind address with DROPMCP_HOST / DROPMCP_PORT.
 """
 
 from pathlib import Path

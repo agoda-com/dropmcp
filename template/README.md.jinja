@@ -23,26 +23,13 @@ pip install -r requirements.txt
 Validate content:
 
 ```bash
-dropmcp validate
+python -c "import sys; from dropmcp.validate import run_validation; sys.exit(run_validation('skills', 'prompts'))"
 ```
 
-Run over stdio (Cursor / Claude Desktop):
+Run the server (streamable-HTTP, catalog UI at `/`, MCP endpoint at `/mcp`):
 
 ```bash
-python server.py
-```
-
-Run over HTTP (hosted / catalog UI at `/catalog`):
-
-```bash
-DROPMCP_TRANSPORT=http DROPMCP_PORT=8080 python server.py
-```
-
-Or use the CLI:
-
-```bash
-dropmcp serve --skills skills --prompts prompts
-dropmcp serve --skills skills --prompts prompts --transport http --port 8080
+DROPMCP_PORT=8080 python server.py
 ```
 
 ## Docker
@@ -52,7 +39,7 @@ docker build -t {{ project_slug }} .
 docker run --rm -p 8080:8080 {{ project_slug }}
 ```
 
-Open http://localhost:8080/catalog to browse skills and prompts.
+Open http://localhost:8080/ to browse skills and prompts.
 
 {% if include_promptfoo_evals %}
 ## Skill evaluations (Promptfoo)
@@ -73,4 +60,4 @@ CI runs `promptfoo eval` when `OPENAI_API_KEY` is configured as a repository sec
 1. **Skill** — create `skills/<name>/SKILL.md` with YAML frontmatter (`name`, `category`, `description`, optional `instruction_summary`). Add supporting files alongside for `skill://` resource links.
 2. **Prompt** — create `prompts/<name>/PROMPT.md` with frontmatter (`name`, `description`, `arguments`). Use `{% raw %}{{arg}}{% endraw %}` placeholders in the body.
 
-Run `dropmcp validate` after changes.
+Re-run the validation command above after changes.

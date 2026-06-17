@@ -19,7 +19,7 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Validate skills and prompts
-        run: dropmcp validate
+        run: python -c "import sys; from dropmcp.validate import run_validation; sys.exit(run_validation('skills', 'prompts'))"
 
   docker:
     runs-on: ubuntu-latest
