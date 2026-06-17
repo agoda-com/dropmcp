@@ -22,8 +22,10 @@ from dropmcp.catalog import CatalogProvider
 from dropmcp.config import Settings
 from dropmcp.feedback import FeedbackProvider, FeedbackStore, feedback_to_dict
 from dropmcp.instructions import build_server_instructions
+from dropmcp.middleware import TelemetryMiddleware
 from dropmcp.prompts import PromptsDirectoryProvider
 from dropmcp.skills import FilteredSkillsProvider
+from dropmcp.telemetry import configure
 
 SUPPORTING_FILES = "resources"
 
@@ -75,6 +77,8 @@ def _file_response(path: Path) -> FileResponse:
 
 
 def build_server(settings: Settings) -> FastMCP:
+    configure(service_name=settings.name)
+
     instructions = build_server_instructions(
         settings.instructions_path,
         settings.skills_dir,
@@ -88,6 +92,8 @@ def build_server(settings: Settings) -> FastMCP:
         website_url=settings.website_url,
         icons=_build_icons(settings),
     )
+
+    mcp.add_middleware(TelemetryMiddleware())
 
     mcp.add_provider(
         FilteredSkillsProvider(

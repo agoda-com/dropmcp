@@ -114,7 +114,7 @@ default).
 |---|---|---|---|
 | `skills` | `DROPMCP_SKILLS` | `skills` | skills directory |
 | `prompts` | `DROPMCP_PROMPTS` | `prompts` | prompts directory |
-| `name` | `DROPMCP_NAME` | `dropmcp` | server name shown to clients |
+| `name` | `DROPMCP_NAME` | `dropmcp` | server name shown to clients and OTEL service name |
 | `website_url` | `DROPMCP_WEBSITE_URL` | – | server homepage URL |
 | `icon` | `DROPMCP_ICON` | – | path to an icon (svg/png) |
 | `instructions` | `DROPMCP_INSTRUCTIONS` | auto | `INSTRUCTIONS.md` template |
@@ -202,8 +202,15 @@ python -m dropmcp
 ```
 
 Metrics and structured logs are emitted per skill invocation, prompt render,
-and resource read. When `OTEL_EXPORTER_OTLP_ENDPOINT` is unset (the default),
-telemetry is a no-op — no extra imports, no overhead.
+resource read, and MCP protocol event (`initialize`, `tools/list`). Metric
+names use dotted OTel style (for example `skill.invocations`,
+`skill.invocation.duration`) with delta temporality for histograms. The OTEL
+service name defaults to `DROPMCP_NAME`; override with `OTEL_SERVICE_NAME` if
+needed.
+
+When `OTEL_EXPORTER_OTLP_ENDPOINT` is unset, OpenTelemetry export is a no-op —
+no extra imports, no export overhead — but structured per-invocation logs still
+go to the console.
 
 ## Agent feedback
 
