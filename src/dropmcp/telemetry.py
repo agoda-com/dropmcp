@@ -39,6 +39,20 @@ _UA_PRODUCT_RE = re.compile(r"^([A-Za-z0-9._-]+)")
 
 _event_logger = logging.getLogger("dropmcp.events")
 
+_event_logging_configured = False
+
+# Stable metric names for dashboards and contract tests.
+METRIC_NAMES = (
+    "skill.invocations",
+    "skill.invocation.duration",
+    "prompt.invocations",
+    "prompt.invocation.duration",
+    "resource.downloads",
+    "resource.download.duration",
+    "mcp.initializations",
+    "mcp.tool_listings",
+)
+
 
 @dataclass
 class _Instruments:
@@ -68,12 +82,34 @@ def is_active() -> bool:
     return bool(_state["active"])
 
 
+def setup_event_logging() -> None:
+    """Ensure structured invocation logs reach the console.
+
+    When OTLP export is active, the root logger also receives an OTEL handler;
+    otherwise console output is the only sink for per-invocation events.
+    """
+    global _event_logging_configured
+    if _event_logging_configured:
+        return
+    _event_logging_configured = True
+    _event_logger.setLevel(logging.INFO)
+    if not _event_logger.handlers:
+        handler = logging.StreamHandler()
+        handler.setFormatter(
+            logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s")
+        )
+        _event_logger.addHandler(handler)
+
+
 def configure(*, service_name: str = "dropmcp") -> bool:
     """Initialise OTEL exporters when the OTLP endpoint env var is set.
 
     Returns ``True`` when metrics/logs export is active. Safe to call more
-    than once; later calls are no-ops.
+    than once; later calls are no-ops. Structured per-invocation logs are
+    always enabled via :func:`setup_event_logging`.
     """
+    setup_event_logging()
+
     if _state["configured"]:
         return bool(_state["active"])
 
@@ -111,7 +147,12 @@ def _setup_otel(service_name: str) -> None:
     _setup_metrics(resource, metrics)
 
     meter = metrics.get_meter("dropmcp")
-    _state["instruments"] = _Instruments(
+    _state["instruments"] = _create_instruments(meter)
+    logger.info("OpenTelemetry telemetry configured for service %s", service_name)
+
+
+def _create_instruments(meter) -> _Instruments:
+    return _Instruments(
         skill_invocations=meter.create_counter(
             name="skill.invocations",
             description="Number of times an MCP skill tool was invoked",
@@ -156,7 +197,6 @@ def _setup_otel(service_name: str) -> None:
             unit="1",
         ),
     )
-    logger.info("OpenTelemetry telemetry configured for service %s", service_name)
 
 
 def _service_resource(service_name: str):
@@ -264,9 +304,6 @@ def log_event(
     **extra: Any,
 ) -> None:
     """Emit a structured log line for an MCP invocation or download."""
-    if not is_active():
-        return
-
     fields: dict[str, Any] = {
         "event": f"{kind}.invoked" if kind != "resource" else "resource.read",
         "kind": kind,
@@ -295,16 +332,15 @@ def _instruments() -> _Instruments | None:
 
 @contextmanager
 def track(kind: str, name: str, **extra: Any) -> Iterator[None]:
-    """Wrap an operation so it can be measured when OTEL is active.
+    """Wrap an operation so it is timed, logged, and optionally metered.
 
     ``kind`` is one of ``"skill"``, ``"prompt"``, or ``"resource"``.
     ``name`` identifies the specific item. For resource reads, pass
     ``resource_kind`` in ``extra`` (e.g. ``"prompt"`` or ``"skill"``).
-    """
-    if not is_active():
-        yield
-        return
 
+    Structured logs are always emitted (console when OTLP is off). OpenTelemetry
+    counters and histograms are recorded only when export is configured.
+    """
     start = time.perf_counter()
     outcome = "success"
     try:
@@ -324,30 +360,32 @@ def _record(
     duration_ms: float,
     **extra: Any,
 ) -> None:
-    instruments = _instruments()
-    if instruments is None:
-        return
-
     client = client_bucket()
 
     if kind == "skill":
         attrs = {"skill": name, "client": client}
-        instruments.skill_invocations.add(1, {**attrs, "outcome": outcome})
-        instruments.skill_invocation_duration_ms.record(duration_ms, attrs)
         log_event(kind="skill", name=name, outcome=outcome, duration_ms=duration_ms)
+        _record_metrics(
+            kind,
+            attrs=attrs,
+            outcome=outcome,
+            duration_ms=duration_ms,
+        )
         return
 
     if kind == "prompt":
         attrs = {"prompt": name, "client": client}
-        instruments.prompt_invocations.add(1, {**attrs, "outcome": outcome})
-        instruments.prompt_invocation_duration_ms.record(duration_ms, attrs)
         log_event(kind="prompt", name=name, outcome=outcome, duration_ms=duration_ms)
+        _record_metrics(
+            kind,
+            attrs=attrs,
+            outcome=outcome,
+            duration_ms=duration_ms,
+        )
         return
 
     resource_kind = extra.get("resource_kind", kind)
     attrs = {"resource": name, "kind": resource_kind, "client": client}
-    instruments.resource_downloads.add(1, {**attrs, "outcome": outcome})
-    instruments.resource_download_duration_ms.record(duration_ms, attrs)
     log_event(
         kind="resource",
         name=name,
@@ -355,6 +393,37 @@ def _record(
         duration_ms=duration_ms,
         resource_kind=resource_kind,
     )
+    _record_metrics(
+        kind,
+        attrs=attrs,
+        outcome=outcome,
+        duration_ms=duration_ms,
+    )
+
+
+def _record_metrics(
+    kind: str,
+    *,
+    attrs: dict[str, str],
+    outcome: str,
+    duration_ms: float,
+) -> None:
+    instruments = _instruments()
+    if instruments is None:
+        return
+
+    if kind == "skill":
+        instruments.skill_invocations.add(1, {**attrs, "outcome": outcome})
+        instruments.skill_invocation_duration_ms.record(duration_ms, attrs)
+        return
+
+    if kind == "prompt":
+        instruments.prompt_invocations.add(1, {**attrs, "outcome": outcome})
+        instruments.prompt_invocation_duration_ms.record(duration_ms, attrs)
+        return
+
+    instruments.resource_downloads.add(1, {**attrs, "outcome": outcome})
+    instruments.resource_download_duration_ms.record(duration_ms, attrs)
 
 
 def record_mcp_initialization(
@@ -364,10 +433,6 @@ def record_mcp_initialization(
     client: str,
     **info: Any,
 ) -> None:
-    instruments = _instruments()
-    if instruments is None:
-        return
-    instruments.mcp_initializations.add(1, {"client": client, "outcome": outcome})
     log_event(
         kind="mcp",
         name="initialize",
@@ -375,6 +440,10 @@ def record_mcp_initialization(
         duration_ms=duration_ms,
         **info,
     )
+    instruments = _instruments()
+    if instruments is None:
+        return
+    instruments.mcp_initializations.add(1, {"client": client, "outcome": outcome})
 
 
 def record_tool_listing(
@@ -384,10 +453,6 @@ def record_tool_listing(
     client: str,
     tool_count: int | None,
 ) -> None:
-    instruments = _instruments()
-    if instruments is None:
-        return
-    instruments.mcp_tool_listings.add(1, {"client": client, "outcome": outcome})
     log_event(
         kind="mcp",
         name="tools/list",
@@ -395,3 +460,7 @@ def record_tool_listing(
         duration_ms=duration_ms,
         tool_count=tool_count,
     )
+    instruments = _instruments()
+    if instruments is None:
+        return
+    instruments.mcp_tool_listings.add(1, {"client": client, "outcome": outcome})
