@@ -141,7 +141,7 @@ class StarRocksEvalResultsStore:
 
     def get_all_latest_results(
         self, project: str, commit_sha: str
-    ) -> dict[str, EvalResult]:
+    ) -> dict[str, list[EvalResult]]:
         sql = """
             SELECT
                 testname,
@@ -162,14 +162,14 @@ class StarRocksEvalResultsStore:
               AND datadate >= %s
             ORDER BY testname, workermodel
         """
-        results: dict[str, EvalResult] = {}
+        results: dict[str, list[EvalResult]] = {}
         try:
             conn = _get_connection()
             cursor = conn.cursor()
             cursor.execute(sql, (project, commit_sha, _datadate_cutoff()))
             for row in cursor.fetchall():
                 result = _row_to_result(row)
-                results[result.test_name] = result
+                results.setdefault(result.test_name, []).append(result)
             cursor.close()
             conn.close()
         except Exception as exc:

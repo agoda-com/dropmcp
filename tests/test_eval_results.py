@@ -19,6 +19,7 @@ def _sample_result(
     test_name: str = "my-skill/basic",
     passed: bool = True,
     commit_sha: str = "abc123def",
+    worker_model: str = "claude-sonnet-4",
 ) -> EvalResult:
     return EvalResult(
         test_name=test_name,
@@ -28,7 +29,7 @@ def _sample_result(
         duration_ms=4500,
         reasoning="Looks good." if passed else "Failed checks.",
         error=None,
-        worker_model="claude-sonnet-4",
+        worker_model=worker_model,
         triggered_at=1_714_200_000_000,
         pipeline_id="12345",
         commit_sha=commit_sha,
@@ -82,12 +83,18 @@ def test_bundled_catalog_defaults_used_when_unset():
 def test_in_memory_store_all_latest():
     store = InMemoryEvalResultsStore(
         [
-            _sample_result(test_name="a/one", commit_sha="sha1"),
+            _sample_result(test_name="a/one", commit_sha="sha1", worker_model="model-a"),
+            _sample_result(test_name="a/one", commit_sha="sha1", worker_model="model-b"),
             _sample_result(test_name="b/two", commit_sha="sha1"),
         ]
     )
     all_results = store.get_all_latest_results("proj", "sha1")
     assert set(all_results) == {"a/one", "b/two"}
+    assert len(all_results["a/one"]) == 2
+    assert {r.worker_model for r in all_results["a/one"]} == {
+        "model-a",
+        "model-b",
+    }
 
 
 @pytest.mark.asyncio
@@ -128,6 +135,7 @@ async def test_telemetry_routes_with_in_memory_store(tmp_path):
         assert all_response.status_code == 200
         all_body = all_response.json()
         assert "demo-skill/basic" in all_body["results"]
+        assert len(all_body["results"]["demo-skill/basic"]) == 2
         assert all_body["commit_sha"] == "deadbeef"
 
         skill_response = client.get("/api/telemetry/demo-skill")

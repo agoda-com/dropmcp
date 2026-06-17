@@ -8,6 +8,8 @@ function StatusDot({ passed }: { passed: boolean }) {
 }
 
 export default function TestResultRow({ result }: { result: SkillTelemetryResult }) {
+  const detail = [result.reasoning, result.error].filter(Boolean).join('\n\n');
+
   return (
     <>
       <tr className={`${styles.row} ${result.passed ? styles.passed : styles.failed}`}>
@@ -22,11 +24,11 @@ export default function TestResultRow({ result }: { result: SkillTelemetryResult
         <td>{result.display_duration}</td>
         <td className={styles.date}>{result.display_date}</td>
       </tr>
-      {result.reasoning && (
+      {detail && (
         <tr className={styles.reasoningRow}>
           <td></td>
           <td colSpan={4} className={styles.reasoningCell}>
-            {result.reasoning}
+            {detail}
           </td>
         </tr>
       )}

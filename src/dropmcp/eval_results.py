@@ -40,7 +40,7 @@ class EvalResultsStore(Protocol):
 
     def get_all_latest_results(
         self, project: str, commit_sha: str
-    ) -> dict[str, EvalResult]: ...
+    ) -> dict[str, list[EvalResult]]: ...
 
 
 def format_duration(ms: int) -> str:
@@ -96,11 +96,11 @@ class InMemoryEvalResultsStore:
 
     def get_all_latest_results(
         self, project: str, commit_sha: str
-    ) -> dict[str, EvalResult]:
-        out: dict[str, EvalResult] = {}
+    ) -> dict[str, list[EvalResult]]:
+        out: dict[str, list[EvalResult]] = {}
         for r in self._results:
             if r.commit_sha == commit_sha:
-                out[r.test_name] = r
+                out.setdefault(r.test_name, []).append(r)
         return out
 
 

@@ -71,7 +71,7 @@ export interface TelemetryResponse {
 
 export interface TelemetryAllResponse {
   project: string;
-  results: Record<string, TelemetryResult & { test_name: string }>;
+  results: Record<string, (TelemetryResult & { test_name: string })[]>;
 }
 
 export async function fetchTelemetry(skillName: string): Promise<TelemetryResponse> {

@@ -317,8 +317,11 @@ def _register_eval_results_routes(
                 "project": project,
                 "commit_sha": commit_sha,
                 "results": {
-                    name: {"test_name": r.test_name, **result_view_model(r)}
-                    for name, r in results.items()
+                    name: [
+                        {"test_name": r.test_name, **result_view_model(r)}
+                        for r in rs
+                    ]
+                    for name, rs in results.items()
                 },
             }
         )
