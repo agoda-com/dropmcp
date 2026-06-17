@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" width="400" height="300">
+  <rect width="400" height="300" fill="#f8fafc" rx="14" ry="14"/>
+  <g fill="none" stroke="#68217a" stroke-width="2.5" stroke-linejoin="round" transform="translate(200,108)">
+    <path d="M-30 30C-46 18-50 0-42-18c8-18 28-28 46-22"/>
+    <path d="M8-8l8-16 8 16"/>
+    <path d="M10-20h12M10-12h12"/>
+  </g>
+  <text x="200" y="218" text-anchor="middle" font-family="system-ui,-apple-system,sans-serif" font-size="15" font-weight="600" fill="#64748b">C#</text>
+</svg>

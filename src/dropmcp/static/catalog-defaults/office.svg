@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" width="400" height="300">
+  <rect width="400" height="300" fill="#f8fafc" rx="14" ry="14"/>
+  <g fill="none" stroke="#0ea5e9" stroke-width="2.5" stroke-linejoin="round" transform="translate(200,112)">
+    <path d="M-22-38h44a6 6 0 016 6v8h-56v-8a6 6 0 016-6z"/>
+    <rect x="-48" y="-18" width="96" height="58" rx="5"/>
+    <line x1="-48" y1="2" x2="48" y2="2"/>
+  </g>
+  <text x="200" y="218" text-anchor="middle" font-family="system-ui,-apple-system,sans-serif" font-size="15" font-weight="600" fill="#64748b">Office</text>
+</svg>

@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" width="400" height="300">
+  <rect width="400" height="300" fill="#f8fafc" rx="14" ry="14"/>
+  <g fill="none" stroke="#f59e0b" stroke-width="2.5" transform="translate(200,102)">
+    <ellipse cx="0" cy="-32" rx="38" ry="11"/>
+    <path d="M-38-32v52"/>
+    <path d="M38-32v52"/>
+    <ellipse cx="0" cy="20" rx="38" ry="11"/>
+    <path d="M-38-10h76"/>
+  </g>
+  <text x="200" y="218" text-anchor="middle" font-family="system-ui,-apple-system,sans-serif" font-size="15" font-weight="600" fill="#64748b">Database</text>
+</svg>

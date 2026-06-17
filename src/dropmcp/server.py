@@ -20,6 +20,7 @@ from starlette.responses import FileResponse, HTMLResponse, JSONResponse
 
 from dropmcp.catalog import CatalogProvider
 from dropmcp.config import Settings
+from dropmcp.eval_results import EvalResultsStore, result_view_model, resolve_starrocks_store
 from dropmcp.feedback import FeedbackProvider, FeedbackStore, feedback_to_dict
 from dropmcp.instructions import build_server_instructions
 from dropmcp.middleware import TelemetryMiddleware
@@ -76,6 +77,14 @@ def _file_response(path: Path) -> FileResponse:
     return FileResponse(path, media_type=mime)
 
 
+def _resolve_eval_results_store(settings: Settings) -> EvalResultsStore | None:
+    if settings.eval_results_store is not None:
+        return settings.eval_results_store
+    if settings.eval_results_project:
+        return resolve_starrocks_store()
+    return None
+
+
 def build_server(settings: Settings) -> FastMCP:
     configure(service_name=settings.name)
 
@@ -116,15 +125,19 @@ def build_server(settings: Settings) -> FastMCP:
         mcp.add_provider(FeedbackProvider(feedback_store))
 
     if settings.ui_enabled:
-        _register_catalog_routes(mcp, settings, feedback_store)
+        eval_store = _resolve_eval_results_store(settings)
+        _register_catalog_routes(mcp, settings, feedback_store, eval_store)
 
     return mcp
 
 
 def _register_catalog_routes(
-    mcp: FastMCP, settings: Settings, feedback_store: FeedbackStore | None
+    mcp: FastMCP,
+    settings: Settings,
+    feedback_store: FeedbackStore | None,
+    eval_store: EvalResultsStore | None,
 ) -> None:
-    defaults_dir = settings.catalog_defaults_dir or (settings.skills_dir.parent / "_none")
+    defaults_dir = settings.catalog_defaults_dir
     catalog = CatalogProvider(
         skills_dir=settings.skills_dir,
         prompts_dir=settings.prompts_dir,
@@ -157,7 +170,10 @@ def _register_catalog_routes(
 
     @mcp.custom_route("/health", methods=["GET"])
     async def health(request: Request) -> JSONResponse:
-        return JSONResponse({"status": "healthy"})
+        payload: dict[str, str] = {"status": "healthy"}
+        if settings.eval_results_commit_sha:
+            payload["commit_sha"] = settings.eval_results_commit_sha
+        return JSONResponse(payload)
 
     @mcp.custom_route("/favicon.svg", methods=["GET"])
     @mcp.custom_route("/favicon.ico", methods=["GET"])
@@ -229,6 +245,9 @@ def _register_catalog_routes(
     if feedback_store is not None:
         _register_feedback_routes(mcp, feedback_store)
 
+    if eval_store is not None and settings.eval_results_project:
+        _register_eval_results_routes(mcp, settings, eval_store)
+
     @mcp.custom_route("/", methods=["GET"])
     async def catalog_ui(request: Request) -> HTMLResponse:
         return HTMLResponse(get_spa_html())
@@ -282,3 +301,42 @@ def _register_feedback_routes(mcp: FastMCP, store: FeedbackStore) -> None:
         if updated is None:
             return JSONResponse({"error": "not found"}, status_code=404)
         return JSONResponse(feedback_to_dict(updated))
+
+
+def _register_eval_results_routes(
+    mcp: FastMCP, settings: Settings, store: EvalResultsStore
+) -> None:
+    project = settings.eval_results_project or ""
+    commit_sha = settings.eval_results_commit_sha or "unknown"
+
+    @mcp.custom_route("/api/telemetry", methods=["GET"])
+    async def telemetry_all(request: Request) -> JSONResponse:
+        results = store.get_all_latest_results(project, commit_sha)
+        return JSONResponse(
+            {
+                "project": project,
+                "commit_sha": commit_sha,
+                "results": {
+                    name: [
+                        {"test_name": r.test_name, **result_view_model(r)}
+                        for r in rs
+                    ]
+                    for name, rs in results.items()
+                },
+            }
+        )
+
+    @mcp.custom_route("/api/telemetry/{skill_name}", methods=["GET"])
+    async def telemetry_skill(request: Request) -> JSONResponse:
+        skill_name = request.path_params.get("skill_name", "")
+        results = store.get_results_for_skill(project, skill_name, commit_sha)
+        return JSONResponse(
+            {
+                "project": project,
+                "skill_name": skill_name,
+                "commit_sha": commit_sha,
+                "results": [
+                    {"test_name": r.test_name, **result_view_model(r)} for r in results
+                ],
+            }
+        )

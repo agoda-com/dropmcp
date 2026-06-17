@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" width="400" height="300">
+  <rect width="400" height="300" fill="#f8fafc" rx="14" ry="14"/>
+  <g fill="#10b981" transform="translate(200,118)">
+    <rect x="-46" y="8" width="22" height="36" rx="3"/>
+    <rect x="-15" y="-12" width="22" height="56" rx="3"/>
+    <rect x="16" y="-28" width="22" height="72" rx="3"/>
+  </g>
+  <text x="200" y="218" text-anchor="middle" font-family="system-ui,-apple-system,sans-serif" font-size="15" font-weight="600" fill="#64748b">Data</text>
+</svg>

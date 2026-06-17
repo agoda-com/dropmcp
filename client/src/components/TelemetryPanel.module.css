@@ -1,0 +1,134 @@
+.panel {
+  margin-top: 2rem;
+  padding: 1.5rem;
+  background: var(--color-surface, #f8fafc);
+  border-radius: 12px;
+  border: 1px solid var(--color-border, #e2e8f0);
+}
+
+.panel h2 {
+  margin: 0 0 1rem 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--color-text, #1e293b);
+}
+
+.loading {
+  padding: 2rem;
+  text-align: center;
+  color: var(--color-text-muted, #64748b);
+}
+
+.empty {
+  padding: 1.5rem;
+  text-align: center;
+  color: var(--color-text-muted, #64748b);
+  font-style: italic;
+}
+
+.testGroup {
+  margin-bottom: 1.5rem;
+}
+
+.testGroup:last-child {
+  margin-bottom: 0;
+}
+
+.testGroupTitle {
+  margin: 0 0 0.5rem 0;
+  font-family: var(--font-mono, monospace);
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--color-text, #1e293b);
+  padding-bottom: 0.25rem;
+  border-bottom: 1px solid var(--color-border, #e2e8f0);
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.table th {
+  text-align: left;
+  padding: 0.5rem 0.5rem;
+  color: var(--color-text-muted, #64748b);
+  font-weight: 500;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.row td {
+  padding: 0.6rem 0.5rem;
+  vertical-align: middle;
+}
+
+.passed {
+  border-left: 3px solid #22c55e;
+}
+
+.failed {
+  border-left: 3px solid #ef4444;
+}
+
+/* Traffic-light dots */
+.passDot,
+.failDot {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+}
+
+.passDot {
+  background: #22c55e;
+  box-shadow: 0 0 4px rgba(34, 197, 94, 0.4);
+}
+
+.failDot {
+  background: #ef4444;
+  box-shadow: 0 0 4px rgba(239, 68, 68, 0.4);
+}
+
+.model {
+  font-family: var(--font-mono, monospace);
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--color-text, #1e293b);
+}
+
+.scorePass {
+  font-weight: 600;
+  color: #16a34a;
+}
+
+.scoreFail {
+  font-weight: 600;
+  color: #ef4444;
+}
+
+.threshold {
+  color: var(--color-text-muted, #64748b);
+  font-size: 0.85em;
+}
+
+.date {
+  color: var(--color-text-muted, #64748b);
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
+/* Reasoning row — always visible below the data row */
+.reasoningRow td {
+  padding: 0 0.5rem 0.75rem 0.5rem;
+  border-bottom: 1px solid var(--color-border, #e2e8f0);
+}
+
+.reasoningCell {
+  font-size: 0.8rem;
+  line-height: 1.5;
+  color: var(--color-text-muted, #64748b);
+  white-space: pre-wrap;
+}

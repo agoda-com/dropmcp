@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" width="400" height="300">
+  <rect width="400" height="300" fill="#f8fafc" rx="14" ry="14"/>
+  <g fill="none" stroke="#6366f1" stroke-width="2.5" stroke-linejoin="round" transform="translate(200,108)">
+    <path d="M-42 8V-22L0-42l42 20v30L0-2z"/>
+    <path d="M0-42v40"/>
+    <path d="M-42-22L0-2l42-20"/>
+    <g stroke-width="1.8" opacity=".45">
+      <line x1="-28" y1="-8" x2="-8" y2="2"/>
+      <line x1="-18" y1="-18" x2="2" y2="-8"/>
+      <line x1="-8" y1="-28" x2="12" y2="-18"/>
+    </g>
+  </g>
+  <text x="200" y="218" text-anchor="middle" font-family="system-ui,-apple-system,sans-serif" font-size="15" font-weight="600" fill="#64748b">Default</text>
+</svg>
