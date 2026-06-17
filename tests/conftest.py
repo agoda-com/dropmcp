@@ -4,17 +4,20 @@ from __future__ import annotations
 
 import pytest
 
-from otel_test_support import (
-    patch_otel_for_tests,
-    reset_telemetry_module_state,
-    shutdown_otel_providers,
+_OTEL_ENV_VARS = (
+    "OTEL_EXPORTER_OTLP_ENDPOINT",
+    "OTEL_SERVICE_NAME",
+    "OTEL_EXPORTER_OTLP_METRICS_TEMPORALITY_PREFERENCE",
 )
 
 
 @pytest.fixture(autouse=True)
-def _isolate_otel_exporters(monkeypatch):
-    """Keep OTLP exporter threads from blocking pytest exit."""
-    patch_otel_for_tests(monkeypatch)
-    reset_telemetry_module_state()
-    yield
-    shutdown_otel_providers()
+def _clean_otel_env(monkeypatch):
+    """Keep an ambient OTLP endpoint from starting real exporters in tests.
+
+    ``build_server()`` calls ``telemetry.configure()``, so without this a
+    developer's (or CI's) shell-level ``OTEL_EXPORTER_OTLP_ENDPOINT`` would spin
+    up live OTLP exporters during otherwise-unrelated tests.
+    """
+    for var in _OTEL_ENV_VARS:
+        monkeypatch.delenv(var, raising=False)

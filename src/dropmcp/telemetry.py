@@ -16,6 +16,7 @@ import atexit
 import logging
 import os
 import re
+import threading
 import time
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -71,9 +72,6 @@ _state: dict[str, Any] = {
     "active": False,
     "instruments": None,
 }
-
-_shutdown_provider_ids: set[int] = set()
-_atexit_handlers: list[Any] = []
 
 
 def _otel_endpoint_set() -> bool:
@@ -210,36 +208,41 @@ def _service_resource(service_name: str):
 
 
 def _flush_on_exit(provider: Any, label: str) -> None:
-    def _handler() -> None:
-        _safe_shutdown(provider, label)
-
-    atexit.register(_handler)
-    _atexit_handlers.append(_handler)
-
-
-def _clear_exit_hooks() -> None:
-    """Drop pending atexit flush hooks (used by tests and explicit shutdown)."""
-    for handler in _atexit_handlers:
-        try:
-            atexit.unregister(handler)
-        except Exception:
-            pass
-    _atexit_handlers.clear()
-    _shutdown_provider_ids.clear()
+    atexit.register(_safe_shutdown, provider, label)
 
 
 def _safe_shutdown(provider: Any, label: str) -> None:
-    key = id(provider)
-    if key in _shutdown_provider_ids:
-        return
-    _shutdown_provider_ids.add(key)
-    try:
-        force_flush = getattr(provider, "force_flush", None)
-        if callable(force_flush):
-            force_flush(_FLUSH_TIMEOUT_MS)
-        provider.shutdown()
-    except Exception:
-        logger.warning("Failed to shutdown OTel %s provider", label, exc_info=True)
+    """Flush and shut a provider down without blocking process exit.
+
+    The OTLP HTTP exporter retries with exponential backoff, so flushing to an
+    unreachable collector can take ~60s and ignores the requested flush timeout.
+    Run the flush on a daemon thread and wait at most ``_FLUSH_TIMEOUT_MS``; if it
+    overruns, abandon it (the daemon thread dies with the process) so shutdown
+    stays bounded.
+    """
+
+    def _run() -> None:
+        try:
+            force_flush = getattr(provider, "force_flush", None)
+            if callable(force_flush):
+                force_flush(_FLUSH_TIMEOUT_MS)
+            provider.shutdown()
+        except Exception:
+            logger.warning(
+                "Failed to shut down OTel %s provider", label, exc_info=True
+            )
+
+    worker = threading.Thread(
+        target=_run, name=f"dropmcp-otel-shutdown-{label}", daemon=True
+    )
+    worker.start()
+    worker.join(_FLUSH_TIMEOUT_MS / 1000)
+    if worker.is_alive():
+        logger.warning(
+            "OTel %s provider shutdown exceeded %dms; abandoning flush",
+            label,
+            _FLUSH_TIMEOUT_MS,
+        )
 
 
 def _setup_logging(resource) -> None:
@@ -248,7 +251,7 @@ def _setup_logging(resource) -> None:
     from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler
     from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
 
-    provider = LoggerProvider(resource=resource)
+    provider = LoggerProvider(resource=resource, shutdown_on_exit=False)
     provider.add_log_record_processor(BatchLogRecordProcessor(OTLPLogExporter()))
     set_logger_provider(provider)
 
@@ -265,7 +268,9 @@ def _setup_metrics(resource, metrics_module) -> None:
     from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
 
     reader = PeriodicExportingMetricReader(OTLPMetricExporter())
-    provider = MeterProvider(resource=resource, metric_readers=[reader])
+    provider = MeterProvider(
+        resource=resource, metric_readers=[reader], shutdown_on_exit=False
+    )
     metrics_module.set_meter_provider(provider)
     _flush_on_exit(provider, "metric")
 

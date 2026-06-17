@@ -1,72 +1,13 @@
-"""Helpers for isolating OpenTelemetry from the pytest process."""
+"""Helpers for testing dropmcp's telemetry wiring in isolation."""
 
 from __future__ import annotations
 
-import logging
 from contextlib import contextmanager
 
 
-def reset_otel_globals() -> None:
-    try:
-        from opentelemetry._logs import NoOpLoggerProvider, set_logger_provider
-        from opentelemetry.metrics import NoOpMeterProvider, set_meter_provider
-
-        set_meter_provider(NoOpMeterProvider())
-        set_logger_provider(NoOpLoggerProvider())
-    except Exception:
-        pass
-
-
-def shutdown_otel_providers() -> None:
-    try:
-        from opentelemetry import _logs, metrics
-        from opentelemetry.sdk._logs import LoggerProvider
-        from opentelemetry.sdk.metrics import MeterProvider
-
-        import dropmcp.telemetry as telemetry
-
-        mp = metrics.get_meter_provider()
-        if isinstance(mp, MeterProvider):
-            mp.shutdown(timeout_millis=100)
-
-        lp = _logs.get_logger_provider()
-        if isinstance(lp, LoggerProvider):
-            root = logging.getLogger()
-            for h in list(root.handlers):
-                if "LoggingHandler" in type(h).__name__:
-                    root.removeHandler(h)
-            lp.shutdown()
-    except Exception:
-        pass
-    finally:
-        try:
-            import dropmcp.telemetry as telemetry
-
-            telemetry._clear_exit_hooks()
-        except Exception:
-            pass
-        reset_otel_globals()
-
-
-def patch_otel_for_tests(monkeypatch) -> None:
-    """Prevent OTLP exporters and atexit flush hooks in unit tests."""
-    monkeypatch.delenv("OTEL_EXPORTER_OTLP_ENDPOINT", raising=False)
-    monkeypatch.delenv("OTEL_SERVICE_NAME", raising=False)
-    monkeypatch.delenv(
-        "OTEL_EXPORTER_OTLP_METRICS_TEMPORALITY_PREFERENCE", raising=False
-    )
-
+def _reset_telemetry_state() -> None:
     import dropmcp.telemetry as telemetry
 
-    monkeypatch.setattr(telemetry, "_flush_on_exit", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(telemetry, "_setup_logging", lambda _resource: None)
-    monkeypatch.setattr(telemetry, "_setup_metrics", lambda _resource, _metrics: None)
-
-
-def reset_telemetry_module_state() -> None:
-    import dropmcp.telemetry as telemetry
-
-    telemetry._clear_exit_hooks()
     telemetry._state["configured"] = False
     telemetry._state["active"] = False
     telemetry._state["instruments"] = None
@@ -76,12 +17,21 @@ def reset_telemetry_module_state() -> None:
 
 @contextmanager
 def fresh_telemetry(monkeypatch):
-    """Reload telemetry with a clean module state."""
+    """Run a telemetry test with clean module state and no real exporters.
+
+    The OTLP exporter setup (``_setup_logging`` / ``_setup_metrics``) is the
+    boundary to the OpenTelemetry SDK — another package whose exporter threads
+    and atexit flushes we don't own and shouldn't exercise here. Stubbing it
+    keeps these tests on dropmcp's own wiring and prevents live exporters from
+    leaking into the pytest process.
+    """
     import dropmcp.telemetry as telemetry
 
-    patch_otel_for_tests(monkeypatch)
-    reset_otel_globals()
-    reset_telemetry_module_state()
-    yield telemetry
-    reset_telemetry_module_state()
-    shutdown_otel_providers()
+    monkeypatch.setattr(telemetry, "_setup_logging", lambda _resource: None)
+    monkeypatch.setattr(telemetry, "_setup_metrics", lambda _resource, _metrics: None)
+
+    _reset_telemetry_state()
+    try:
+        yield telemetry
+    finally:
+        _reset_telemetry_state()
