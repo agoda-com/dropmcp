@@ -10,6 +10,7 @@ export default defineConfig({
   server: {
     proxy: {
       '/catalog': 'http://localhost:8000',
+      '/api': 'http://localhost:8000',
       '/health': 'http://localhost:8000',
       '/icon.svg': 'http://localhost:8000',
       '/favicon.svg': 'http://localhost:8000',

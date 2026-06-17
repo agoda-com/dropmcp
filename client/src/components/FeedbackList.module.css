@@ -1,0 +1,17 @@
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.empty,
+.error,
+.loading {
+  text-align: center;
+  padding: 3rem 1rem;
+  color: var(--color-text-muted);
+}
+
+.error {
+  color: var(--brand-red);
+}
