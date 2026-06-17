@@ -57,3 +57,10 @@
   opacity: 0.55;
   cursor: not-allowed;
 }
+
+.saveError {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--brand-red);
+}

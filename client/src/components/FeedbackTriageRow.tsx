@@ -17,15 +17,20 @@ export default function FeedbackTriageRow({
   const [status, setStatus] = useState(item.status);
   const [resolutionUrl, setResolutionUrl] = useState(item.resolution_url ?? '');
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   async function handleSave() {
     setSaving(true);
+    setError(null);
     try {
       await patchFeedback(item.id, {
         status,
         resolution_url: resolutionUrl.trim() || null,
       });
       onUpdated();
+    } catch (err) {
+      console.error('Failed to save feedback triage state:', err);
+      setError(err instanceof Error ? err.message : 'Failed to save changes.');
     } finally {
       setSaving(false);
     }
@@ -58,6 +63,7 @@ export default function FeedbackTriageRow({
       <button type="button" className={styles.saveBtn} disabled={saving} onClick={handleSave}>
         {saving ? 'Saving…' : 'Save'}
       </button>
+      {error && <p className={styles.saveError} role="alert">{error}</p>}
     </div>
   );
 }

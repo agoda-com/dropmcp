@@ -84,9 +84,16 @@ def _resolve_instructions_path(
 
 
 def _default_database_url(skills_dir: Path) -> str:
-    """SQLite file next to the content folders (cwd first, then skills parent)."""
+    """SQLite file next to the content folders.
+
+    An existing ``dropmcp.db`` wins — cwd first, then the skills parent — so a
+    server keeps reading the same store regardless of where it is launched from.
+    When none exists, a new file is created in the cwd.
+    """
     for base in (Path.cwd(), skills_dir.parent):
-        return f"sqlite:///{(base / DEFAULT_DATABASE_FILENAME).resolve()}"
+        db_path = base / DEFAULT_DATABASE_FILENAME
+        if db_path.is_file():
+            return f"sqlite:///{db_path.resolve()}"
     return f"sqlite:///{(Path.cwd() / DEFAULT_DATABASE_FILENAME).resolve()}"
 
 

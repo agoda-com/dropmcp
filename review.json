@@ -1,0 +1,16 @@
+{
+  "event": "COMMENT",
+  "body": "Here are a few suggestions for improvement.",
+  "comments": [
+    {
+      "path": "src/dropmcp/config.py",
+      "line": 88,
+      "body": "The `for` loop here will always return on the first iteration (`Path.cwd()`), meaning `skills_dir.parent` is never checked. If the intention is to use the first one that exists, you should add an `.exists()` check. If the intention is just to fallback, the loop isn't doing what's intended.\n\n```python\ndef _default_database_url(skills_dir: Path) -> str:\n    for base in (Path.cwd(), skills_dir.parent):\n        db_path = base / DEFAULT_DATABASE_FILENAME\n        if db_path.exists():\n            return f\"sqlite:///{db_path.resolve()}\"\n    return f\"sqlite:///{(skills_dir.parent / DEFAULT_DATABASE_FILENAME).resolve()}\"\n```"
+    },
+    {
+      "path": "client/src/components/FeedbackTriageRow.tsx",
+      "line": 26,
+      "body": "Any errors from `patchFeedback` will be silently swallowed here. It might be worth adding a `catch` block to at least log the error or show a simple alert so the user knows their save failed.\n\n```typescript\n  async function handleSave() {\n    setSaving(true);\n    try {\n      await patchFeedback(item.id, {\n        status,\n        resolution_url: resolutionUrl.trim() || null,\n      });\n      onUpdated();\n    } catch (err) {\n      console.error('Failed to save feedback triage state:', err);\n      alert('Failed to save changes. Please try again.');\n    } finally {\n      setSaving(false);\n    }\n  }\n```"
+    }
+  ]
+}
