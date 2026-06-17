@@ -4,6 +4,7 @@ import Header from './components/Header';
 import Footer from './components/Footer';
 import CatalogPage from './pages/CatalogPage';
 import DetailPage from './pages/DetailPage';
+import FeedbackPage from './pages/FeedbackPage';
 
 export default function App() {
   return (
@@ -12,6 +13,7 @@ export default function App() {
         <Header />
         <Routes>
           <Route path="/" element={<CatalogPage />} />
+          <Route path="/feedback" element={<FeedbackPage />} />
           <Route path="/:type/:name" element={<DetailPage />} />
         </Routes>
         <Footer />

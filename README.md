@@ -122,6 +122,7 @@ default).
 | `port` | `DROPMCP_PORT` | `8000` | bind port |
 | `ui_enabled` | `DROPMCP_UI` | `true` | serve the catalog HTTP routes |
 | `reload` | `DROPMCP_RELOAD` | `false` | re-scan skills/prompts on every request |
+| `database_url` | `DROPMCP_DATABASE_URL` | `sqlite:///<cwd>/dropmcp.db` | feedback database (SQLite file or Postgres URL) |
 
 If an `INSTRUCTIONS.md` sits next to your content folders it is picked up
 automatically; otherwise a generic default ships with the package. The
@@ -202,6 +203,22 @@ python -m dropmcp
 Metrics and structured logs are emitted per skill invocation, prompt render,
 and resource read. When `OTEL_EXPORTER_OTLP_ENDPOINT` is unset (the default),
 telemetry is a no-op — no extra imports, no overhead.
+
+## Agent feedback
+
+dropmcp includes a built-in feedback loop for when agents get corrected:
+
+- **`record_feedback` MCP tool** — agents write structured confessions (no external Slack/GitLab wiring).
+- **SQLite by default** — a `dropmcp.db` file is created next to your content folders on first run.
+- **Postgres override** — set `DROPMCP_DATABASE_URL=postgresql://user:pass@host/db` for durable hosted storage.
+- **Feedback UI** — browse, search, filter, and triage at `/feedback` in the catalog SPA (`GET`/`PATCH /api/feedback`).
+
+Privacy guardrails: no verbatim user prompts, code, secrets, or PII. The bundled
+`agent-confessions` example skill describes when and how agents should call
+`record_feedback`.
+
+In containers, mount a volume over the SQLite file (or use Postgres) or feedback
+is lost when the pod restarts.
 
 ## Skill and prompt format
 

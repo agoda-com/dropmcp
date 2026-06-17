@@ -28,6 +28,7 @@ DEFAULT_PORT = 8000
 INSTRUCTIONS_FILENAME = "INSTRUCTIONS.md"
 DEFAULT_INSTRUCTIONS_RESOURCE = "INSTRUCTIONS.default.md"
 DEFAULT_ICON_RESOURCE = "static/icon.svg"
+DEFAULT_DATABASE_FILENAME = "dropmcp.db"
 
 
 def _env(name: str) -> str | None:
@@ -82,6 +83,23 @@ def _resolve_instructions_path(
     return _packaged_default_instructions()
 
 
+def _default_database_url(skills_dir: Path) -> str:
+    """SQLite file next to the content folders (cwd first, then skills parent)."""
+    for base in (Path.cwd(), skills_dir.parent):
+        return f"sqlite:///{(base / DEFAULT_DATABASE_FILENAME).resolve()}"
+    return f"sqlite:///{(Path.cwd() / DEFAULT_DATABASE_FILENAME).resolve()}"
+
+
+def _resolve_database_url(
+    explicit: str | None,
+    skills_dir: Path,
+) -> str:
+    chosen = _first(explicit, _env("DROPMCP_DATABASE_URL"))
+    if chosen is not None:
+        return chosen
+    return _default_database_url(skills_dir)
+
+
 def _resolve_icon_path(
     explicit: str | Path | None,
     skills_dir: Path,
@@ -110,6 +128,7 @@ class Settings:
     port: int
     ui_enabled: bool
     reload: bool
+    database_url: str
 
     @classmethod
     def resolve(
@@ -126,6 +145,7 @@ class Settings:
         port: int | None = None,
         ui_enabled: bool | None = None,
         reload: bool | None = None,
+        database_url: str | None = None,
     ) -> "Settings":
         skills_dir = Path(
             _first(skills, _env("DROPMCP_SKILLS"), DEFAULT_SKILLS_DIR)
@@ -153,4 +173,5 @@ class Settings:
             port=int(port_raw),
             ui_enabled=_first(ui_enabled, _env_bool("DROPMCP_UI"), True),
             reload=_first(reload, _env_bool("DROPMCP_RELOAD"), False),
+            database_url=_resolve_database_url(database_url, skills_dir),
         )

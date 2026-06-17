@@ -1,4 +1,5 @@
 import { useCatalog } from '../context/CatalogContext';
+import { Link } from 'react-router-dom';
 import styles from './Header.module.css';
 
 export default function Header() {
@@ -12,7 +13,10 @@ export default function Header() {
         )}
         <div>
           <h1>{server.name}</h1>
-          <p>Browse skills and prompts for AI agents</p>
+          <p>
+            Browse skills and prompts for AI agents ·{' '}
+            <Link to="/feedback">Feedback</Link>
+          </p>
         </div>
       </div>
     </header>

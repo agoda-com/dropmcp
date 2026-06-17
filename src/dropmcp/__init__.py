@@ -44,6 +44,7 @@ def create_server(
     port: int | None = None,
     ui_enabled: bool | None = None,
     reload: bool | None = None,
+    database_url: str | None = None,
 ) -> FastMCP:
     """Build and return a configured `FastMCP` server without running it.
 
@@ -63,6 +64,7 @@ def create_server(
         port=port,
         ui_enabled=ui_enabled,
         reload=reload,
+        database_url=database_url,
     )
     return build_server(settings)
 
@@ -80,6 +82,7 @@ def run(
     port: int | None = None,
     ui_enabled: bool | None = None,
     reload: bool | None = None,
+    database_url: str | None = None,
 ) -> None:
     """Build the server and serve it over streamable-HTTP.
 
@@ -99,6 +102,7 @@ def run(
         port=port,
         ui_enabled=ui_enabled,
         reload=reload,
+        database_url=database_url,
     )
     mcp = build_server(settings)
 

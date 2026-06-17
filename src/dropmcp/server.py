@@ -20,6 +20,7 @@ from starlette.responses import FileResponse, HTMLResponse, JSONResponse
 
 from dropmcp.catalog import CatalogProvider
 from dropmcp.config import Settings
+from dropmcp.feedback import FeedbackProvider, FeedbackStore, feedback_to_dict
 from dropmcp.instructions import build_server_instructions
 from dropmcp.prompts import PromptsDirectoryProvider
 from dropmcp.skills import FilteredSkillsProvider
@@ -101,13 +102,18 @@ def build_server(settings: Settings) -> FastMCP:
         )
     )
 
+    feedback_store = FeedbackStore(settings.database_url)
+    mcp.add_provider(FeedbackProvider(feedback_store))
+
     if settings.ui_enabled:
-        _register_catalog_routes(mcp, settings)
+        _register_catalog_routes(mcp, settings, feedback_store)
 
     return mcp
 
 
-def _register_catalog_routes(mcp: FastMCP, settings: Settings) -> None:
+def _register_catalog_routes(
+    mcp: FastMCP, settings: Settings, feedback_store: FeedbackStore
+) -> None:
     defaults_dir = settings.catalog_defaults_dir or (settings.skills_dir.parent / "_none")
     catalog = CatalogProvider(
         skills_dir=settings.skills_dir,
@@ -210,6 +216,8 @@ def _register_catalog_routes(mcp: FastMCP, settings: Settings) -> None:
             return JSONResponse({"error": "not found"}, status_code=404)
         return _file_response(path)
 
+    _register_feedback_routes(mcp, feedback_store)
+
     @mcp.custom_route("/", methods=["GET"])
     async def catalog_ui(request: Request) -> HTMLResponse:
         return HTMLResponse(get_spa_html())
@@ -221,3 +229,45 @@ def _register_catalog_routes(mcp: FastMCP, settings: Settings) -> None:
         if candidate.is_file() and dist_dir in candidate.resolve().parents:
             return _file_response(candidate)
         return HTMLResponse(get_spa_html())
+
+
+def _register_feedback_routes(mcp: FastMCP, store: FeedbackStore) -> None:
+    @mcp.custom_route("/api/feedback", methods=["GET"])
+    async def feedback_list(request: Request) -> JSONResponse:
+        params = request.query_params
+        items = store.list(
+            search=params.get("search"),
+            model=params.get("model"),
+            client=params.get("client"),
+            skill_name=params.get("skill_name"),
+            status=params.get("status"),
+        )
+        return JSONResponse({"items": [feedback_to_dict(item) for item in items]})
+
+    @mcp.custom_route("/api/feedback/{entry_id}", methods=["PATCH"])
+    async def feedback_patch(request: Request) -> JSONResponse:
+        try:
+            body = await request.json()
+        except Exception:
+            return JSONResponse({"error": "invalid json"}, status_code=400)
+
+        if not isinstance(body, dict):
+            return JSONResponse({"error": "invalid body"}, status_code=400)
+
+        status = body.get("status")
+        resolution_url = body.get("resolution_url")
+        if status is None and resolution_url is None:
+            return JSONResponse({"error": "nothing to update"}, status_code=400)
+
+        try:
+            updated = store.patch(
+                request.path_params["entry_id"],
+                status=status,
+                resolution_url=resolution_url,
+            )
+        except ValueError as exc:
+            return JSONResponse({"error": str(exc)}, status_code=400)
+
+        if updated is None:
+            return JSONResponse({"error": "not found"}, status_code=404)
+        return JSONResponse(feedback_to_dict(updated))
