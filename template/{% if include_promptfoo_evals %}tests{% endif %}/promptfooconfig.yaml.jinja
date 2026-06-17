@@ -1,0 +1,16 @@
+description: {{ project_name }} — skill quality evaluations
+
+prompts:
+  - file://prompts/skill-eval.txt
+
+providers:
+  - id: openai:gpt-4o-mini
+    config:
+      temperature: 0
+
+defaultTest:
+  options:
+    transformVars: file://transform.cjs
+
+tests:
+  - file://hello-world/eval.yaml

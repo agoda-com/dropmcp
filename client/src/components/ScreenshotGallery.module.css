@@ -1,0 +1,18 @@
+.gallery {
+  display: flex;
+  gap: 0.65rem;
+  overflow-x: auto;
+  padding-bottom: 0.35rem;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+}
+
+.gallery img {
+  flex: 0 0 auto;
+  width: min(280px, 75vw);
+  height: 160px;
+  object-fit: cover;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  scroll-snap-align: start;
+}

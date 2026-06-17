@@ -1,0 +1,23 @@
+_min_copier_version: "9.0.0"
+
+project_name:
+  type: str
+  help: Human-readable name for your skills MCP server (shown in the catalog and to MCP clients).
+  default: my-skills-mcp
+
+project_slug:
+  type: str
+  help: URL-safe slug used for Docker image tags and the Python project name.
+  default: "{{ project_name | lower | replace(' ', '-') | replace('_', '-') }}"
+  when: false
+
+dropmcp_version:
+  type: str
+  help: Pinned dropmcp version for generated projects.
+  default: "0.1.0"
+  when: false
+
+include_promptfoo_evals:
+  type: bool
+  help: Include Promptfoo eval scaffolding under tests/ (skill-quality regression checks).
+  default: false

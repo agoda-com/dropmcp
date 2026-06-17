@@ -1,0 +1,63 @@
+# {{ project_name }}
+
+A [dropmcp](https://github.com/agoda-com/dropmcp) skills & prompts MCP server.
+
+## Layout
+
+```
+skills/          # SKILL.md folders → MCP tools
+prompts/         # PROMPT.md folders → MCP prompts
+INSTRUCTIONS.md  # Server instructions ({% raw %}{{INSTRUCTION_SUMMARIES}}{% endraw %} placeholders)
+server.py        # One-liner entrypoint
+requirements.txt # Pinned dropmcp dependency
+```
+
+## Local development
+
+Install dependencies (pins `dropmcp=={{ dropmcp_version }}`):
+
+```bash
+pip install -r requirements.txt
+```
+
+Validate content:
+
+```bash
+python -c "import sys; from dropmcp.validate import run_validation; sys.exit(run_validation('skills', 'prompts'))"
+```
+
+Run the server (streamable-HTTP, catalog UI at `/`, MCP endpoint at `/mcp`):
+
+```bash
+DROPMCP_PORT=8080 python server.py
+```
+
+## Docker
+
+```bash
+docker build -t {{ project_slug }} .
+docker run --rm -p 8080:8080 {{ project_slug }}
+```
+
+Open http://localhost:8080/ to browse skills and prompts.
+
+{% if include_promptfoo_evals %}
+## Skill evaluations (Promptfoo)
+
+Eval configs live under `tests/`. Run them locally (requires an OpenAI API key):
+
+```bash
+cd tests
+npx promptfoo@latest eval
+npx promptfoo@latest view
+```
+
+CI runs `promptfoo eval` when `OPENAI_API_KEY` is configured as a repository secret.
+{% endif %}
+
+## Adding content
+
+1. **Skill** — create `skills/<name>/SKILL.md` with YAML frontmatter (`name`, `category`, `description`, optional `instruction_summary`). Add supporting files alongside for `skill://` resource links.
+2. **Prompt** — create `prompts/<name>/PROMPT.md` with frontmatter (`name`, `description`, `arguments`). Use `{% raw %}{{arg}}{% endraw %}` placeholders in the body.
+
+Re-run the validation command above after changes.

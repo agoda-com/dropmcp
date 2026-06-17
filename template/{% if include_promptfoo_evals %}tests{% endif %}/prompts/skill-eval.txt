@@ -1,0 +1,9 @@
+You are evaluating the quality of a skill document.
+
+Here is the skill content:
+
+{{skill_content}}
+
+User question: {{question}}
+
+Provide a helpful, accurate answer based on the skill content above. If the skill does not cover the topic, say so clearly.
