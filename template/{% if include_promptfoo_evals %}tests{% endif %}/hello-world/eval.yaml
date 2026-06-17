@@ -1,0 +1,19 @@
+- vars:
+    skill_path: skills/hello-world/SKILL.md
+    question: "How do I add a new skill to my MCP server?"
+  assert:
+    - type: contains-any
+      value:
+        - SKILL.md
+        - skills/
+        - folder
+
+- vars:
+    skill_path: skills/hello-world/SKILL.md
+    question: "What happens to supporting files next to SKILL.md?"
+  assert:
+    - type: contains-any
+      value:
+        - resource
+        - skill://
+        - link

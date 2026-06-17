@@ -1,0 +1,57 @@
+.banner {
+  position: relative;
+  overflow: hidden;
+  padding: 2.5rem 1.25rem 3rem;
+  background: #1A2332;
+  color: #fff;
+}
+
+.banner::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, #FDB812, #FF2938, #00B057, #AF38B1, #00AAE0);
+}
+
+.banner::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse 60% 80% at 85% 50%, rgba(13, 148, 136, 0.15), transparent);
+  pointer-events: none;
+}
+
+.inner {
+  position: relative;
+  max-width: 1200px;
+  margin: 0 auto;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.icon {
+  width: 3rem;
+  height: 3rem;
+  border-radius: 0.75rem;
+  flex-shrink: 0;
+}
+
+.inner h1 {
+  margin: 0 0 0.5rem;
+  font-size: clamp(1.75rem, 4vw, 2.5rem);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.inner p {
+  margin: 0;
+  font-size: 1.05rem;
+  opacity: 0.92;
+  max-width: 36rem;
+}
+

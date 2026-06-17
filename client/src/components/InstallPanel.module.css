@@ -1,0 +1,194 @@
+.panel {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--color-shadow-lg);
+  margin-bottom: 2rem;
+  overflow: hidden;
+  animation: fadeUp 0.45s ease both;
+}
+
+.toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 1.25rem;
+  background: transparent;
+  border: none;
+  color: var(--color-text);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+  transition: background var(--transition);
+}
+
+.toggle:hover {
+  background: var(--color-primary-muted);
+}
+
+.chevron {
+  width: 1.25rem;
+  height: 1.25rem;
+  flex-shrink: 0;
+  transition: transform var(--transition);
+  opacity: 0.7;
+}
+
+.panel[data-open="true"] .chevron {
+  transform: rotate(180deg);
+}
+
+.body {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.35s ease;
+}
+
+.panel[data-open="true"] .body {
+  grid-template-rows: 1fr;
+}
+
+.bodyInner {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.content {
+  padding: 0 1.25rem 1.25rem;
+  border-top: 1px solid var(--color-border);
+}
+
+.tablist {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin: 1rem 0 0.75rem;
+}
+
+.tab {
+  padding: 0.45rem 0.9rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-elevated);
+  color: var(--color-text-muted);
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: color var(--transition), border-color var(--transition), background var(--transition), box-shadow var(--transition);
+}
+
+.tab:hover {
+  color: var(--color-text);
+  border-color: var(--color-primary);
+}
+
+.tab[aria-selected="true"] {
+  color: #fff;
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  box-shadow: 0 2px 8px rgba(13, 148, 136, 0.35);
+}
+
+.tabPanel {
+  margin-top: 0.75rem;
+}
+
+.tabPanel[aria-hidden="true"] {
+  display: none;
+}
+
+.tabPanel[aria-hidden="false"] {
+  display: block;
+  animation: fadeIn 0.25s ease;
+}
+
+.snippetRow {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-start;
+}
+
+.snippetWrap {
+  flex: 1;
+  min-width: 0;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background: var(--color-bg);
+  overflow: hidden;
+}
+
+.snippet {
+  margin: 0;
+  padding: 0.85rem 1rem;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  overflow-x: auto;
+  white-space: pre;
+  color: var(--color-text);
+}
+
+.btnCopy {
+  flex-shrink: 0;
+  padding: 0.5rem 0.85rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-elevated);
+  color: var(--color-text);
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--transition), border-color var(--transition), transform 0.15s ease;
+}
+
+.btnCopy:hover {
+  border-color: var(--color-primary);
+  background: var(--color-primary-muted);
+}
+
+.btnCopy:active {
+  transform: scale(0.97);
+}
+
+.copied {
+  border-color: #10b981;
+  color: #059669;
+}
+
+.desktopHint {
+  margin: 0.75rem 0 0.5rem;
+  font-size: 0.875rem;
+  color: var(--color-text-muted);
+}
+
+.desktopHint strong {
+  color: var(--color-text);
+}
+
+.desktopFields {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.desktopField {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.desktopLabel {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
+@media (prefers-color-scheme: dark) {
+  .copied {
+    color: #34d399;
+  }
+}

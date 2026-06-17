@@ -1,0 +1,55 @@
+import type { CatalogItem } from '../src/api/catalog';
+
+export const MOCK_ITEMS: CatalogItem[] = [
+  {
+    name: 'hello-world',
+    type: 'skill',
+    category: 'examples',
+    description: 'A minimal example skill for testing the catalog UI.',
+    arguments: [],
+    has_hero: false,
+    has_thumbnail: false,
+    screenshot_count: 0,
+    example_count: 0,
+    thumbnail_url: null,
+    hero_url: null,
+    screenshots: [],
+    examples: [],
+  },
+  {
+    name: 'code-review',
+    type: 'skill',
+    category: 'engineering',
+    description: 'Review code changes for correctness, clarity, and maintainability.',
+    arguments: [],
+    has_hero: true,
+    has_thumbnail: true,
+    screenshot_count: 2,
+    example_count: 0,
+    thumbnail_url: null,
+    hero_url: null,
+    screenshots: [],
+    examples: [],
+  },
+  {
+    name: 'greet',
+    type: 'prompt',
+    category: 'examples',
+    description: 'Greet someone by name using a template argument.',
+    arguments: [{ name: 'name', required: true, description: 'Person to greet' }],
+    has_hero: false,
+    has_thumbnail: false,
+    screenshot_count: 0,
+    example_count: 0,
+    thumbnail_url: null,
+    hero_url: null,
+    screenshots: [],
+    examples: [],
+  },
+];
+
+export const MOCK_SERVER = {
+  name: 'Example MCP Server',
+  website_url: 'https://github.com/agoda-com/dropmcp',
+  icon_url: '/icon.svg',
+};

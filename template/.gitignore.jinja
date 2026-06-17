@@ -1,0 +1,11 @@
+__pycache__/
+*.py[cod]
+.venv/
+.env
+.copier-answers.yml
+dist/
+*.egg-info/
+{% if include_promptfoo_evals %}
+tests/output/
+tests/.promptfoo/
+{% endif %}
