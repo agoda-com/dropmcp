@@ -34,6 +34,7 @@ DEFAULT_INSTRUCTIONS_RESOURCE = "INSTRUCTIONS.default.md"
 DEFAULT_ICON_RESOURCE = "static/icon.svg"
 DEFAULT_CATALOG_DEFAULTS_RESOURCE = "static/catalog-defaults"
 DEFAULT_DATABASE_FILENAME = "dropmcp.db"
+DEFAULT_USER_HEADER = "X-User-Email"
 COMMIT_SHA_FILENAME = "COMMIT_SHA"
 
 
@@ -164,6 +165,8 @@ class Settings:
     port: int
     ui_enabled: bool
     feedback_enabled: bool
+    user_subscriptions_enabled: bool
+    user_header: str
     reload: bool
     database_url: str
     eval_results_project: str | None
@@ -185,6 +188,8 @@ class Settings:
         port: int | None = None,
         ui_enabled: bool | None = None,
         feedback_enabled: bool | None = None,
+        user_subscriptions_enabled: bool | None = None,
+        user_header: str | None = None,
         reload: bool | None = None,
         database_url: str | None = None,
         eval_results_project: str | None = None,
@@ -220,6 +225,14 @@ class Settings:
             ui_enabled=_first(ui_enabled, _env_bool("DROPMCP_UI"), True),
             feedback_enabled=_first(
                 feedback_enabled, _env_bool("DROPMCP_FEEDBACK"), True
+            ),
+            user_subscriptions_enabled=_first(
+                user_subscriptions_enabled,
+                _env_bool("DROPMCP_USER_SUBSCRIPTIONS"),
+                False,
+            ),
+            user_header=_first(
+                user_header, _env("DROPMCP_USER_HEADER"), DEFAULT_USER_HEADER
             ),
             reload=_first(reload, _env_bool("DROPMCP_RELOAD"), False),
             database_url=_resolve_database_url(database_url, skills_dir),

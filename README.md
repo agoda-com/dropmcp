@@ -122,6 +122,8 @@ default).
 | `port` | `DROPMCP_PORT` | `8000` | bind port |
 | `ui_enabled` | `DROPMCP_UI` | `true` | serve the catalog HTTP routes |
 | `feedback_enabled` | `DROPMCP_FEEDBACK` | `true` | enable the `record_feedback` tool, feedback HTTP routes, and always-on instructions |
+| `user_subscriptions_enabled` | `DROPMCP_USER_SUBSCRIPTIONS` | `false` | per-user skill/prompt opt-in over MCP and subscription HTTP API |
+| `user_header` | `DROPMCP_USER_HEADER` | `X-User-Email` | HTTP header carrying the trusted caller identity |
 | `reload` | `DROPMCP_RELOAD` | `false` | re-scan skills/prompts on every request |
 | `database_url` | `DROPMCP_DATABASE_URL` | `sqlite:///<cwd>/dropmcp.db` | feedback database (SQLite file or Postgres URL) |
 | `eval_results_project` | `DROPMCP_EVAL_RESULTS_PROJECT` | – | GitLab project path for E2E eval results (enables `/api/telemetry` when a store is available) |
@@ -233,6 +235,28 @@ to install. Disable the whole feature (tool, HTTP routes, and instructions) with
 In containers, mount a volume over the SQLite file (or use Postgres) or feedback
 is lost when the pod restarts.
 
+## Per-user subscriptions
+
+When `DROPMCP_USER_SUBSCRIPTIONS=true`, users can opt in to individual skills
+and prompts so their agent only sees a curated subset over MCP. The catalog UI
+still lists the full catalog; subscription checkboxes appear when the request
+includes the configured identity header (default `X-User-Email`, set upstream by
+your auth mesh).
+
+- **Flag off** — unchanged behaviour; everything is published to every caller.
+- **Flag on, no identity header** — MCP exposes everything; UI controls are disabled.
+- **Flag on, identity present, no opt-ins** — pure opt-in: MCP returns nothing
+  until the user subscribes via the catalog UI or HTTP API.
+- **HTTP API** — `GET`/`POST /api/subscriptions`, `DELETE /api/subscriptions/{type}/{name}`,
+  and group snapshot routes `POST`/`DELETE /api/subscriptions/group/{group}`.
+- **`group` frontmatter** — optional string on `SKILL.md` / `PROMPT.md`; surfaced in
+  `/catalog` JSON and the catalog **Group** filter row with bulk opt-in/out.
+- **SQLite** auto-creates the `user_subscription` table locally; **Postgres**
+  consumers must ship a SyncDB migration (same caveat as `feedback`).
+
+MCP clients cache `tools/list` / `prompts/list` — subscription changes take
+effect after the client re-lists (typically on reconnect).
+
 ## E2E eval results (telemetry panel)
 
 The catalog detail page includes an **E2E Test Results** panel (ported from
@@ -262,6 +286,7 @@ registered. This keeps StarRocks / Fleet JWT coupling out of the base package.
 ---
 name: my-skill
 category: my-category
+group: my-group
 description: One-line description shown to the LLM as the tool description.
 instruction_summary: Short phrase for the server-level INSTRUCTIONS.md bullet.
 ---

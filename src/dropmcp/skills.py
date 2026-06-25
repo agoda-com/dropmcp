@@ -12,7 +12,7 @@ from __future__ import annotations
 import logging
 import mimetypes
 import re
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import yaml
 from fastmcp.resources.base import Resource
@@ -23,7 +23,12 @@ from fastmcp.tools.base import Tool, ToolResult
 from mcp.types import ResourceLink, TextContent
 from pydantic import AnyUrl, ConfigDict, PrivateAttr
 
+from dropmcp.subscriptions import item_visible_over_mcp, resolve_mcp_user
 from dropmcp.telemetry import track
+
+if TYPE_CHECKING:
+    from dropmcp.config import Settings
+    from dropmcp.subscriptions import UserSubscriptionStore
 
 logger = logging.getLogger(__name__)
 
@@ -182,6 +187,28 @@ class FilteredSkillsProvider(SkillsDirectoryProvider):
 
     _HIDDEN_SUFFIXES = ("/SKILL.md", "/_manifest")
 
+    def __init__(
+        self,
+        roots,
+        *,
+        supporting_files: str = "resources",
+        reload: bool = False,
+        subscription_store: UserSubscriptionStore | None = None,
+        subscription_settings: Settings | None = None,
+    ) -> None:
+        super().__init__(roots, supporting_files=supporting_files, reload=reload)
+        self._subscription_store = subscription_store
+        self._subscription_settings = subscription_settings
+
+    def _skill_visible(self, name: str) -> bool:
+        settings = self._subscription_settings
+        if settings is None or self._subscription_store is None:
+            return True
+        user = resolve_mcp_user(settings)
+        return item_visible_over_mcp(
+            settings, self._subscription_store, user, "skill", name
+        )
+
     async def _list_resources(self):
         resources = await super()._list_resources()
         return [r for r in resources if self._is_visible(str(r.uri))]
@@ -204,6 +231,8 @@ class FilteredSkillsProvider(SkillsDirectoryProvider):
         for p in self.providers:
             if not isinstance(p, SkillProvider):
                 continue
+            if not self._skill_visible(p.skill_info.name):
+                continue
             try:
                 tools.append(_build_skill_tool(p.skill_info))
             except Exception:
@@ -215,6 +244,8 @@ class FilteredSkillsProvider(SkillsDirectoryProvider):
         return tools
 
     async def _get_tool(self, name, version=None):
+        if not self._skill_visible(name):
+            return None
         await self._ensure_discovered()
         for p in self.providers:
             if isinstance(p, SkillProvider) and p.skill_info.name == name:

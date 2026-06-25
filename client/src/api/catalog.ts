@@ -2,6 +2,7 @@ export interface CatalogItem {
   name: string;
   type: 'skill' | 'prompt';
   category: string;
+  group?: string | null;
   description: string;
   arguments: { name: string; required: boolean; description: string }[];
   has_hero: boolean;
@@ -12,6 +13,7 @@ export interface CatalogItem {
   hero_url: string | null;
   screenshots: string[];
   examples: string[];
+  subscribed?: boolean;
 }
 
 export interface CatalogServer {
@@ -23,15 +25,24 @@ export interface CatalogServer {
 interface CatalogResponse {
   items: CatalogItem[];
   server: CatalogServer;
+  subscriptions_enabled?: boolean;
+  user?: string | null;
 }
 
-export async function fetchCatalog(): Promise<CatalogResponse> {
+export async function fetchCatalog(): Promise<{
+  items: CatalogItem[];
+  server: CatalogServer;
+  subscriptionsEnabled: boolean;
+  user: string | null;
+}> {
   const res = await fetch('/catalog');
   if (!res.ok) throw new Error(`Could not load catalog (${res.status}).`);
   const data: CatalogResponse = await res.json();
   return {
     items: Array.isArray(data.items) ? data.items : [],
     server: data.server ?? { name: 'Catalog', website_url: null, icon_url: null },
+    subscriptionsEnabled: Boolean(data.subscriptions_enabled),
+    user: data.user ?? null,
   };
 }
 

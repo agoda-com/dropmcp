@@ -11,10 +11,17 @@ export default function CatalogPage() {
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState('all');
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
+  const [groupFilter, setGroupFilter] = useState<string | null>(null);
 
   const categories = useMemo(() => {
     const set = new Set<string>();
     items.forEach((i) => { if (i.category) set.add(i.category); });
+    return Array.from(set).sort();
+  }, [items]);
+
+  const groups = useMemo(() => {
+    const set = new Set<string>();
+    items.forEach((i) => { if (i.group) set.add(i.group); });
     return Array.from(set).sort();
   }, [items]);
 
@@ -23,13 +30,14 @@ export default function CatalogPage() {
     return items.filter((item) => {
       if (typeFilter !== 'all' && item.type !== typeFilter) return false;
       if (categoryFilter && item.category !== categoryFilter) return false;
+      if (groupFilter && item.group !== groupFilter) return false;
       if (!q) return true;
       return (
         item.name.toLowerCase().includes(q) ||
         (item.description || '').toLowerCase().includes(q)
       );
     });
-  }, [items, search, typeFilter, categoryFilter]);
+  }, [items, search, typeFilter, categoryFilter, groupFilter]);
 
   return (
     <main className={styles.main}>
@@ -43,6 +51,10 @@ export default function CatalogPage() {
         categories={categories}
         categoryFilter={categoryFilter}
         onCategoryChange={setCategoryFilter}
+        groups={groups}
+        groupFilter={groupFilter}
+        onGroupChange={setGroupFilter}
+        allItems={items}
       />
 
       <CatalogContent
