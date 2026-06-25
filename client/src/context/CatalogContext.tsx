@@ -1,5 +1,6 @@
 import {
   createContext,
+  useCallback,
   useContext,
   useEffect,
   useState,
@@ -16,6 +17,20 @@ interface CatalogState {
   server: CatalogServer;
   loading: boolean;
   error: string | null;
+  subscriptionsEnabled: boolean;
+  user: string | null;
+  subscriptionControlsEnabled: boolean;
+  subscribedGroups: string[];
+  updateItemSubscription: (
+    type: 'skill' | 'prompt',
+    name: string,
+    subscribed: boolean,
+  ) => void;
+  updateGroupSubscriptions: (
+    group: string,
+    members: CatalogItem[],
+    subscribed: boolean,
+  ) => void;
 }
 
 const defaultServer: CatalogServer = {
@@ -29,6 +44,12 @@ const CatalogContext = createContext<CatalogState>({
   server: defaultServer,
   loading: true,
   error: null,
+  subscriptionsEnabled: false,
+  user: null,
+  subscriptionControlsEnabled: false,
+  subscribedGroups: [],
+  updateItemSubscription: () => {},
+  updateGroupSubscriptions: () => {},
 });
 
 export function CatalogProvider({ children }: { children: ReactNode }) {
@@ -36,12 +57,18 @@ export function CatalogProvider({ children }: { children: ReactNode }) {
   const [server, setServer] = useState<CatalogServer>(defaultServer);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [subscriptionsEnabled, setSubscriptionsEnabled] = useState(false);
+  const [user, setUser] = useState<string | null>(null);
+  const [subscribedGroups, setSubscribedGroups] = useState<string[]>([]);
 
   useEffect(() => {
     fetchCatalog()
       .then((data) => {
         setItems(data.items);
         setServer(data.server);
+        setSubscriptionsEnabled(data.subscriptionsEnabled);
+        setUser(data.user);
+        setSubscribedGroups(data.subscribedGroups);
         if (data.server.name) {
           document.title = data.server.name;
         }
@@ -60,8 +87,57 @@ export function CatalogProvider({ children }: { children: ReactNode }) {
       .finally(() => setLoading(false));
   }, []);
 
+  const updateItemSubscription = useCallback(
+    (type: 'skill' | 'prompt', name: string, subscribed: boolean) => {
+      setItems((prev) =>
+        prev.map((item) =>
+          item.type === type && item.name === name
+            ? { ...item, subscribed }
+            : item,
+        ),
+      );
+    },
+    [],
+  );
+
+  const updateGroupSubscriptions = useCallback(
+    (group: string, members: CatalogItem[], subscribed: boolean) => {
+      const memberKeys = new Set(
+        members.filter((m) => m.group === group).map((m) => `${m.type}:${m.name}`),
+      );
+      setSubscribedGroups((prev) =>
+        subscribed
+          ? [...new Set([...prev, group])]
+          : prev.filter((g) => g !== group),
+      );
+      setItems((prev) =>
+        prev.map((item) =>
+          memberKeys.has(`${item.type}:${item.name}`)
+            ? { ...item, subscribed }
+            : item,
+        ),
+      );
+    },
+    [],
+  );
+
+  const subscriptionControlsEnabled = subscriptionsEnabled && user !== null;
+
   return (
-    <CatalogContext.Provider value={{ items, server, loading, error }}>
+    <CatalogContext.Provider
+      value={{
+        items,
+        server,
+        loading,
+        error,
+        subscriptionsEnabled,
+        user,
+        subscriptionControlsEnabled,
+        subscribedGroups,
+        updateItemSubscription,
+        updateGroupSubscriptions,
+      }}
+    >
       {children}
     </CatalogContext.Provider>
   );

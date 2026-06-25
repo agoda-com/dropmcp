@@ -1,3 +1,7 @@
+.cardWrap {
+  position: relative;
+}
+
 .card {
   display: block;
   text-decoration: none;
@@ -130,4 +134,29 @@
   border-radius: 999px;
   background: var(--color-primary-muted);
   color: var(--color-primary);
+}
+
+.subscribeControl {
+  position: absolute;
+  right: 0.75rem;
+  bottom: 0.75rem;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--color-shadow);
+  cursor: pointer;
+}
+
+.subscribeControl input {
+  width: 1rem;
+  height: 1rem;
+  margin: 0;
+  cursor: pointer;
+  accent-color: var(--color-primary);
 }

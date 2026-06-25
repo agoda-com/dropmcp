@@ -1,18 +1,58 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useState, type MouseEvent } from 'react';
 import { Link } from 'react-router-dom';
 import type { CatalogItem } from '../api/catalog';
+import { subscribeItem, unsubscribeItem } from '../api/subscriptions';
+import { useCatalog } from '../context/CatalogContext';
 import { formatName } from '../utils/format';
 import styles from './CatalogCard.module.css';
 
 export default function CatalogCard({ item }: { item: CatalogItem }) {
   const type = item.type || 'skill';
   const detailPath = `/${type}/${item.name}`;
+  const {
+    subscriptionControlsEnabled,
+    updateItemSubscription,
+  } = useCatalog();
+
+  const handleSubscriptionToggle = async (
+    event: MouseEvent<HTMLInputElement>,
+  ) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const next = !item.subscribed;
+    updateItemSubscription(type, item.name, next);
+    try {
+      if (next) {
+        await subscribeItem(type, item.name);
+      } else {
+        await unsubscribeItem(type, item.name);
+      }
+    } catch {
+      updateItemSubscription(type, item.name, !next);
+    }
+  };
 
   return (
-    <Link to={detailPath} className={styles.card}>
-      <CardThumbnail thumbnailUrl={item.thumbnail_url} />
-      <CardBody item={item} type={type} />
-    </Link>
+    <div className={styles.cardWrap}>
+      <Link to={detailPath} className={styles.card}>
+        <CardThumbnail thumbnailUrl={item.thumbnail_url} />
+        <CardBody item={item} type={type} />
+      </Link>
+      {subscriptionControlsEnabled && (
+        <label
+          className={styles.subscribeControl}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <input
+            type="checkbox"
+            checked={Boolean(item.subscribed)}
+            aria-label={`Subscribe to ${item.name}`}
+            onChange={() => {}}
+            onClick={handleSubscriptionToggle}
+          />
+        </label>
+      )}
+    </div>
   );
 }
 

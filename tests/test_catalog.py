@@ -18,13 +18,15 @@ def _write_skill(
     *,
     name: str | None = None,
     category: str = "test",
+    group: str | None = None,
     description: str = "A skill",
 ) -> Path:
     skill_dir = skills_root / dir_name
     skill_dir.mkdir(parents=True, exist_ok=True)
     effective_name = name or dir_name
+    group_line = f"group: {group}\n" if group else ""
     (skill_dir / "SKILL.md").write_text(
-        f"---\nname: {effective_name}\ncategory: {category}\ndescription: {description}\n---\nbody",
+        f"---\nname: {effective_name}\ncategory: {category}\n{group_line}description: {description}\n---\nbody",
         encoding="utf-8",
     )
     return skill_dir
@@ -77,6 +79,15 @@ def test_discover_skill(tmp_path):
     assert e.name == "my-skill"
     assert e.type == "skill"
     assert e.description == "Does things"
+
+
+def test_discover_skill_group(tmp_path):
+    provider, skills, _ = _make_provider(tmp_path)
+    _write_skill(skills, "my-skill", name="my-skill", group="platform")
+
+    entry = provider.get_entry("skill", "my-skill")
+    assert entry is not None
+    assert entry.group == "platform"
 
 
 def test_discover_prompt(tmp_path):

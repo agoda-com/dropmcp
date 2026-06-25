@@ -96,6 +96,7 @@ class CatalogEntry:
     name: str
     type: str
     category: str
+    group: str | None
     description: str
     arguments: list[dict]
     has_hero: bool
@@ -145,6 +146,8 @@ class CatalogProvider:
                 meta = _parse_frontmatter_meta(main_file)
                 name = str(meta["name"])
                 category = str(meta.get("category", ""))
+                group_raw = meta.get("group")
+                group = str(group_raw).strip() if group_raw else None
                 description = str(meta.get("description", ""))
                 item_dir = skill_dir.resolve()
                 catalog_dir = (item_dir / CATALOG_DIR).resolve()
@@ -154,6 +157,7 @@ class CatalogProvider:
                         name=name,
                         type="skill",
                         category=category,
+                        group=group,
                         description=description,
                         arguments=[],
                         has_hero=has_hero,
@@ -183,6 +187,8 @@ class CatalogProvider:
                 meta = _parse_frontmatter_meta(main_file)
                 name = str(meta["name"])
                 description = str(meta.get("description", ""))
+                group_raw = meta.get("group")
+                group = str(group_raw).strip() if group_raw else None
                 arguments = meta.get("arguments", [])
                 if not isinstance(arguments, list):
                     arguments = []
@@ -196,6 +202,7 @@ class CatalogProvider:
                         name=name,
                         type="prompt",
                         category="prompts",
+                        group=group,
                         description=description,
                         arguments=arguments,
                         has_hero=has_hero,

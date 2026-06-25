@@ -1,4 +1,8 @@
+import { useCallback, useRef, useEffect } from 'react';
 import { formatName } from '../utils/format';
+import { useCatalog } from '../context/CatalogContext';
+import type { CatalogItem } from '../api/catalog';
+import { subscribeGroup, unsubscribeGroup } from '../api/subscriptions';
 import styles from './SearchToolbar.module.css';
 
 interface Props {
@@ -9,6 +13,10 @@ interface Props {
   categories: string[];
   categoryFilter: string | null;
   onCategoryChange: (cat: string | null) => void;
+  groups: string[];
+  groupFilter: string | null;
+  onGroupChange: (group: string | null) => void;
+  allItems: CatalogItem[];
 }
 
 export default function SearchToolbar({
@@ -19,7 +27,53 @@ export default function SearchToolbar({
   categories,
   categoryFilter,
   onCategoryChange,
+  groups,
+  groupFilter,
+  onGroupChange,
+  allItems,
 }: Props) {
+  const {
+    subscriptionControlsEnabled,
+    subscribedGroups,
+    updateGroupSubscriptions,
+  } = useCatalog();
+
+  const groupMembers = useCallback(
+    (group: string) => allItems.filter((item) => item.group === group),
+    [allItems],
+  );
+
+  const groupState = useCallback(
+    (group: string): 'checked' | 'unchecked' | 'indeterminate' => {
+      if (!subscribedGroups.includes(group)) return 'unchecked';
+      const members = groupMembers(group);
+      if (members.length === 0) return 'checked';
+      const subscribedCount = members.filter((m) => m.subscribed).length;
+      if (subscribedCount === members.length) return 'checked';
+      return 'indeterminate';
+    },
+    [groupMembers, subscribedGroups],
+  );
+
+  const handleGroupCheckbox = async (
+    group: string,
+    nextChecked: boolean,
+    event: React.MouseEvent,
+  ) => {
+    event.stopPropagation();
+    const members = groupMembers(group);
+    updateGroupSubscriptions(group, members, nextChecked);
+    try {
+      if (nextChecked) {
+        await subscribeGroup(group);
+      } else {
+        await unsubscribeGroup(group);
+      }
+    } catch {
+      updateGroupSubscriptions(group, members, !nextChecked);
+    }
+  };
+
   return (
     <div className={styles.toolbar}>
       <div className={styles.searchWrap}>
@@ -68,6 +122,74 @@ export default function SearchToolbar({
           </div>
         </div>
       )}
+      {groups.length > 0 && (
+        <div className={styles.filterRow}>
+          <span className={styles.filterLabel}>Group</span>
+          <div className={styles.categories}>
+            {groups.map((group) => (
+              <GroupPill
+                key={group}
+                group={group}
+                active={groupFilter === group}
+                checkboxState={groupState(group)}
+                showCheckbox={subscriptionControlsEnabled}
+                onFilterClick={() => onGroupChange(groupFilter === group ? null : group)}
+                onCheckboxToggle={(checked, event) =>
+                  handleGroupCheckbox(group, checked, event)
+                }
+              />
+            ))}
+          </div>
+        </div>
+      )}
     </div>
+  );
+}
+
+function GroupPill({
+  group,
+  active,
+  checkboxState,
+  showCheckbox,
+  onFilterClick,
+  onCheckboxToggle,
+}: {
+  group: string;
+  active: boolean;
+  checkboxState: 'checked' | 'unchecked' | 'indeterminate';
+  showCheckbox: boolean;
+  onFilterClick: () => void;
+  onCheckboxToggle: (checked: boolean, event: React.MouseEvent) => void;
+}) {
+  const checkboxRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (checkboxRef.current) {
+      checkboxRef.current.indeterminate = checkboxState === 'indeterminate';
+    }
+  }, [checkboxState]);
+
+  return (
+    <button
+      type="button"
+      className={`${styles.pill} ${styles.groupPill} ${active ? styles.active : ''}`}
+      onClick={onFilterClick}
+    >
+      {showCheckbox && (
+        <input
+          ref={checkboxRef}
+          type="checkbox"
+          className={styles.groupCheckbox}
+          checked={checkboxState === 'checked'}
+          aria-label={`Subscribe to all in ${group}`}
+          onClick={(e) => {
+            e.stopPropagation();
+            onCheckboxToggle(checkboxState !== 'checked', e);
+          }}
+          onChange={() => {}}
+        />
+      )}
+      <span>{formatName(group)}</span>
+    </button>
   );
 }

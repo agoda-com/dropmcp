@@ -12,7 +12,7 @@ from __future__ import annotations
 import logging
 import mimetypes
 import re
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import yaml
 from fastmcp.resources.base import Resource
@@ -23,7 +23,12 @@ from fastmcp.tools.base import Tool, ToolResult
 from mcp.types import ResourceLink, TextContent
 from pydantic import AnyUrl, ConfigDict, PrivateAttr
 
+from dropmcp.subscriptions import item_visible_over_mcp, resolve_mcp_user
 from dropmcp.telemetry import track
+
+if TYPE_CHECKING:
+    from dropmcp.config import Settings
+    from dropmcp.subscriptions import SubscriptionCoordinator, UserSubscriptionStore
 
 logger = logging.getLogger(__name__)
 
@@ -108,6 +113,19 @@ def _parse_description(info: SkillInfo) -> str:
     return info.description
 
 
+def _frontmatter_group(info: SkillInfo) -> str | None:
+    raw = (info.path / info.main_file).read_text(encoding="utf-8")
+    match = _FRONTMATTER_RE.match(raw)
+    if not match:
+        return None
+    try:
+        meta = yaml.safe_load(match.group(1)) or {}
+        group_raw = meta.get("group")
+        return str(group_raw).strip() if group_raw else None
+    except yaml.YAMLError:
+        return None
+
+
 def _build_skill_tool(info: SkillInfo) -> SkillTool:
     return SkillTool(
         name=info.name,
@@ -182,6 +200,43 @@ class FilteredSkillsProvider(SkillsDirectoryProvider):
 
     _HIDDEN_SUFFIXES = ("/SKILL.md", "/_manifest")
 
+    def __init__(
+        self,
+        roots,
+        *,
+        supporting_files: str = "resources",
+        reload: bool = False,
+        subscription_store: UserSubscriptionStore | None = None,
+        subscription_settings: Settings | None = None,
+        subscription_coordinator: SubscriptionCoordinator | None = None,
+    ) -> None:
+        super().__init__(roots, supporting_files=supporting_files, reload=reload)
+        self._subscription_store = subscription_store
+        self._subscription_settings = subscription_settings
+        self._subscription_coordinator = subscription_coordinator
+
+    def _mcp_user(self) -> str | None:
+        if self._subscription_coordinator is not None:
+            return self._subscription_coordinator.mcp_user()
+        if self._subscription_settings is None:
+            return None
+        return resolve_mcp_user(self._subscription_settings)
+
+    def _skill_visible(self, name: str, skill_info: SkillInfo | None = None) -> bool:
+        settings = self._subscription_settings
+        if settings is None or self._subscription_store is None:
+            return True
+        user = self._mcp_user()
+        group = _frontmatter_group(skill_info) if skill_info is not None else None
+        return item_visible_over_mcp(
+            settings,
+            self._subscription_store,
+            user,
+            "skill",
+            name,
+            group=group,
+        )
+
     async def _list_resources(self):
         resources = await super()._list_resources()
         return [r for r in resources if self._is_visible(str(r.uri))]
@@ -204,6 +259,8 @@ class FilteredSkillsProvider(SkillsDirectoryProvider):
         for p in self.providers:
             if not isinstance(p, SkillProvider):
                 continue
+            if not self._skill_visible(p.skill_info.name, p.skill_info):
+                continue
             try:
                 tools.append(_build_skill_tool(p.skill_info))
             except Exception:
@@ -218,5 +275,7 @@ class FilteredSkillsProvider(SkillsDirectoryProvider):
         await self._ensure_discovered()
         for p in self.providers:
             if isinstance(p, SkillProvider) and p.skill_info.name == name:
+                if not self._skill_visible(name, p.skill_info):
+                    return None
                 return _build_skill_tool(p.skill_info)
         return None
