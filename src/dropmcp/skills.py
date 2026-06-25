@@ -27,6 +27,8 @@ from dropmcp.telemetry import track
 
 logger = logging.getLogger(__name__)
 
+_RESOURCE_LINK_EXCLUDED_EXTENSIONS = (".ttf", ".otf", ".woff", ".woff2")
+
 _FRONTMATTER_RE = re.compile(r"^---\s*\n(.*?)\n---\s*\n", re.DOTALL)
 
 
@@ -41,6 +43,8 @@ class SkillTool(Tool):
             result: list = [TextContent(type="text", text=content)]
             for f in self.skill_info.files:
                 if f.path == self.skill_info.main_file or f.path.startswith("catalog/"):
+                    continue
+                if f.path.lower().endswith(_RESOURCE_LINK_EXCLUDED_EXTENSIONS):
                     continue
                 mime, _ = mimetypes.guess_type(f.path)
                 result.append(

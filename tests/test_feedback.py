@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from unittest.mock import MagicMock, patch
+
 import pytest
 
 from dropmcp.feedback import (
@@ -140,3 +142,16 @@ def test_database_url_from_env(monkeypatch, tmp_path):
 
     settings = Settings.resolve(skills=tmp_path / "skills")
     assert settings.database_url == f"sqlite:///{db_path}"
+
+
+def test_feedback_store_create_all_only_for_sqlite(tmp_path):
+    with patch("dropmcp.feedback.MetaData.create_all") as create_all:
+        FeedbackStore(f"sqlite:///{tmp_path / 'test.db'}")
+        create_all.assert_called_once()
+
+    with (
+        patch("dropmcp.feedback.create_engine", return_value=MagicMock()),
+        patch("dropmcp.feedback.MetaData.create_all") as create_all,
+    ):
+        FeedbackStore("postgresql://user:pass@host/db")
+        create_all.assert_not_called()

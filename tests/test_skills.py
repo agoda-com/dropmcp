@@ -252,3 +252,30 @@ async def test_skill_tool_run_excludes_catalog_files(tmp_path):
     links = [c for c in result.content if isinstance(c, ResourceLink)]
     uris = [str(link.uri) for link in links]
     assert not any("catalog" in u for u in uris)
+
+
+@pytest.mark.asyncio
+async def test_skill_tool_run_excludes_font_files(tmp_path):
+    skill_dir = _write_skill(tmp_path, "s", "name: s\ncategory: c\ndescription: d\n")
+
+    from fastmcp.server.providers.skills._common import SkillFileInfo
+    info = SkillInfo(
+        name="s",
+        path=skill_dir,
+        main_file="SKILL.md",
+        description="d",
+        files=[
+            SkillFileInfo(path="SKILL.md", size=10, hash="abc"),
+            SkillFileInfo(path="resources/AgodaSans-Regular.ttf", size=100, hash="f1"),
+            SkillFileInfo(path="resources/AgodaSans-Bold.WOFF2", size=80, hash="f2"),
+            SkillFileInfo(path="reference.md", size=50, hash="def"),
+        ],
+    )
+    tool = _build_skill_tool(info)
+    result = await tool.run({})
+
+    from mcp.types import ResourceLink
+    links = [c for c in result.content if isinstance(c, ResourceLink)]
+    uris = [str(link.uri) for link in links]
+    assert any("reference.md" in u for u in uris)
+    assert not any(u.endswith(".ttf") or ".woff2" in u.lower() for u in uris)

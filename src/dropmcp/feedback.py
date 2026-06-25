@@ -113,7 +113,9 @@ class FeedbackStore:
             Column("status", String(16), nullable=False, default="new"),
             Column("resolution_url", Text),
         )
-        self._metadata.create_all(self._engine)
+        # Only auto-create schema for SQLite (local dev). Managed Postgres relies on SyncDB.
+        if database_url.startswith("sqlite"):
+            self._metadata.create_all(self._engine)
 
     def insert(
         self,
