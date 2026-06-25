@@ -20,6 +20,7 @@ interface CatalogState {
   subscriptionsEnabled: boolean;
   user: string | null;
   subscriptionControlsEnabled: boolean;
+  subscribedGroups: string[];
   updateItemSubscription: (
     type: 'skill' | 'prompt',
     name: string,
@@ -46,6 +47,7 @@ const CatalogContext = createContext<CatalogState>({
   subscriptionsEnabled: false,
   user: null,
   subscriptionControlsEnabled: false,
+  subscribedGroups: [],
   updateItemSubscription: () => {},
   updateGroupSubscriptions: () => {},
 });
@@ -57,6 +59,7 @@ export function CatalogProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState<string | null>(null);
   const [subscriptionsEnabled, setSubscriptionsEnabled] = useState(false);
   const [user, setUser] = useState<string | null>(null);
+  const [subscribedGroups, setSubscribedGroups] = useState<string[]>([]);
 
   useEffect(() => {
     fetchCatalog()
@@ -65,6 +68,7 @@ export function CatalogProvider({ children }: { children: ReactNode }) {
         setServer(data.server);
         setSubscriptionsEnabled(data.subscriptionsEnabled);
         setUser(data.user);
+        setSubscribedGroups(data.subscribedGroups);
         if (data.server.name) {
           document.title = data.server.name;
         }
@@ -101,6 +105,11 @@ export function CatalogProvider({ children }: { children: ReactNode }) {
       const memberKeys = new Set(
         members.filter((m) => m.group === group).map((m) => `${m.type}:${m.name}`),
       );
+      setSubscribedGroups((prev) =>
+        subscribed
+          ? [...new Set([...prev, group])]
+          : prev.filter((g) => g !== group),
+      );
       setItems((prev) =>
         prev.map((item) =>
           memberKeys.has(`${item.type}:${item.name}`)
@@ -124,6 +133,7 @@ export function CatalogProvider({ children }: { children: ReactNode }) {
         subscriptionsEnabled,
         user,
         subscriptionControlsEnabled,
+        subscribedGroups,
         updateItemSubscription,
         updateGroupSubscriptions,
       }}

@@ -28,7 +28,7 @@ from dropmcp.telemetry import track
 
 if TYPE_CHECKING:
     from dropmcp.config import Settings
-    from dropmcp.subscriptions import UserSubscriptionStore
+    from dropmcp.subscriptions import SubscriptionCoordinator, UserSubscriptionStore
 
 log = logging.getLogger(__name__)
 
@@ -125,28 +125,45 @@ class PromptsDirectoryProvider(Provider):
         reload: bool = False,
         subscription_store: UserSubscriptionStore | None = None,
         subscription_settings: Settings | None = None,
+        subscription_coordinator: SubscriptionCoordinator | None = None,
     ) -> None:
         super().__init__()
         self._roots = Path(roots)
         self._reload = reload
         self._prompts: list[Prompt] | None = None
         self._resources: list[Resource] | None = None
+        self._prompt_groups: dict[str, str | None] = {}
         self._subscription_store = subscription_store
         self._subscription_settings = subscription_settings
+        self._subscription_coordinator = subscription_coordinator
+
+    def _mcp_user(self) -> str | None:
+        if self._subscription_coordinator is not None:
+            return self._subscription_coordinator.mcp_user()
+        if self._subscription_settings is None:
+            return None
+        return resolve_mcp_user(self._subscription_settings)
 
     def _prompt_visible(self, name: str) -> bool:
         settings = self._subscription_settings
         if settings is None or self._subscription_store is None:
             return True
-        user = resolve_mcp_user(settings)
+        user = self._mcp_user()
         return item_visible_over_mcp(
-            settings, self._subscription_store, user, "prompt", name
+            settings,
+            self._subscription_store,
+            user,
+            "prompt",
+            name,
+            group=self._prompt_groups.get(name),
         )
 
     def _discover(self) -> tuple[list[Prompt], list[Resource]]:
         prompts: list[Prompt] = []
         resources: list[Resource] = []
+        groups: dict[str, str | None] = {}
         if not self._roots.is_dir():
+            self._prompt_groups = groups
             return prompts, resources
 
         for prompt_dir in sorted(self._roots.iterdir()):
@@ -157,9 +174,14 @@ class PromptsDirectoryProvider(Provider):
                 meta, template = _parse_prompt_file(main_file)
                 prompt = _build_prompt(meta, template)
                 prompts.append(prompt)
+                group_raw = meta.get("group")
+                groups[prompt.name] = (
+                    str(group_raw).strip() if group_raw else None
+                )
                 resources.extend(_collect_assets(meta["name"], prompt_dir / ASSETS_DIR))
             except Exception as exc:
                 log.warning("Skipping %s: %s", prompt_dir.name, exc)
+        self._prompt_groups = groups
         return prompts, resources
 
     def _ensure_discovered(self) -> None:

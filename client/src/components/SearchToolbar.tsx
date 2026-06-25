@@ -34,6 +34,7 @@ export default function SearchToolbar({
 }: Props) {
   const {
     subscriptionControlsEnabled,
+    subscribedGroups,
     updateGroupSubscriptions,
   } = useCatalog();
 
@@ -44,14 +45,14 @@ export default function SearchToolbar({
 
   const groupState = useCallback(
     (group: string): 'checked' | 'unchecked' | 'indeterminate' => {
+      if (!subscribedGroups.includes(group)) return 'unchecked';
       const members = groupMembers(group);
-      if (members.length === 0) return 'unchecked';
+      if (members.length === 0) return 'checked';
       const subscribedCount = members.filter((m) => m.subscribed).length;
-      if (subscribedCount === 0) return 'unchecked';
       if (subscribedCount === members.length) return 'checked';
       return 'indeterminate';
     },
-    [groupMembers],
+    [groupMembers, subscribedGroups],
   );
 
   const handleGroupCheckbox = async (

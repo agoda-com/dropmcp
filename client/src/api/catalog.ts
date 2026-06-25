@@ -27,6 +27,8 @@ interface CatalogResponse {
   server: CatalogServer;
   subscriptions_enabled?: boolean;
   user?: string | null;
+  subscribed_groups?: string[];
+  available_groups?: string[];
 }
 
 export async function fetchCatalog(): Promise<{
@@ -34,6 +36,8 @@ export async function fetchCatalog(): Promise<{
   server: CatalogServer;
   subscriptionsEnabled: boolean;
   user: string | null;
+  subscribedGroups: string[];
+  availableGroups: string[];
 }> {
   const res = await fetch('/catalog');
   if (!res.ok) throw new Error(`Could not load catalog (${res.status}).`);
@@ -43,6 +47,12 @@ export async function fetchCatalog(): Promise<{
     server: data.server ?? { name: 'Catalog', website_url: null, icon_url: null },
     subscriptionsEnabled: Boolean(data.subscriptions_enabled),
     user: data.user ?? null,
+    subscribedGroups: Array.isArray(data.subscribed_groups)
+      ? data.subscribed_groups
+      : [],
+    availableGroups: Array.isArray(data.available_groups)
+      ? data.available_groups
+      : [],
   };
 }
 

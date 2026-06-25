@@ -29,7 +29,9 @@ from dropmcp.prompts import PromptsDirectoryProvider
 from dropmcp.skills import FilteredSkillsProvider
 from dropmcp.subscriptions import (
     ITEM_TYPES,
+    SubscriptionCoordinator,
     UserSubscriptionStore,
+    group_subscription_to_dict,
     subscription_to_dict,
 )
 from dropmcp.telemetry import configure
@@ -119,6 +121,25 @@ def build_server(settings: Settings) -> FastMCP:
         if settings.user_subscriptions_enabled
         else None
     )
+    subscription_coordinator: SubscriptionCoordinator | None = None
+    if subscription_store is not None:
+        subscription_catalog = CatalogProvider(
+            skills_dir=settings.skills_dir,
+            prompts_dir=settings.prompts_dir,
+            defaults_dir=settings.catalog_defaults_dir,
+            reload=settings.reload,
+        )
+
+        def _subscription_groups() -> list[str]:
+            return sorted(
+                {e.group for e in subscription_catalog.get_entries() if e.group}
+            )
+
+        subscription_coordinator = SubscriptionCoordinator(
+            subscription_store,
+            settings,
+            _subscription_groups,
+        )
 
     mcp.add_provider(
         FilteredSkillsProvider(
@@ -127,6 +148,7 @@ def build_server(settings: Settings) -> FastMCP:
             reload=settings.reload,
             subscription_store=subscription_store,
             subscription_settings=settings,
+            subscription_coordinator=subscription_coordinator,
         )
     )
     mcp.add_provider(
@@ -135,6 +157,7 @@ def build_server(settings: Settings) -> FastMCP:
             reload=settings.reload,
             subscription_store=subscription_store,
             subscription_settings=settings,
+            subscription_coordinator=subscription_coordinator,
         )
     )
 
@@ -147,16 +170,27 @@ def build_server(settings: Settings) -> FastMCP:
     if settings.ui_enabled:
         eval_store = _resolve_eval_results_store(settings)
         _register_catalog_routes(
-            mcp, settings, feedback_store, eval_store, subscription_store
+            mcp,
+            settings,
+            feedback_store,
+            eval_store,
+            subscription_store,
+            subscription_coordinator,
         )
     elif subscription_store is not None and settings.user_subscriptions_enabled:
-        catalog = CatalogProvider(
+        subscription_catalog = CatalogProvider(
             skills_dir=settings.skills_dir,
             prompts_dir=settings.prompts_dir,
             defaults_dir=settings.catalog_defaults_dir,
             reload=settings.reload,
         )
-        _register_subscription_routes(mcp, settings, subscription_store, catalog)
+        _register_subscription_routes(
+            mcp,
+            settings,
+            subscription_store,
+            subscription_catalog,
+            subscription_coordinator,
+        )
 
     return mcp
 
@@ -167,6 +201,7 @@ def _register_catalog_routes(
     feedback_store: FeedbackStore | None,
     eval_store: EvalResultsStore | None,
     subscription_store: UserSubscriptionStore | None,
+    subscription_coordinator: SubscriptionCoordinator | None,
 ) -> None:
     defaults_dir = settings.catalog_defaults_dir
     catalog = CatalogProvider(
@@ -214,31 +249,34 @@ def _register_catalog_routes(
 
     @mcp.custom_route("/catalog", methods=["GET"])
     async def catalog_index(request: Request) -> JSONResponse:
-        user = (
-            user_from_request(request, settings.user_header)
-            if settings.user_subscriptions_enabled
-            else None
+        user = None
+        subscribed_groups: list[str] = []
+        if settings.user_subscriptions_enabled and subscription_coordinator is not None:
+            user = subscription_coordinator.http_user(request)
+
+        available_groups = sorted(
+            {e.group for e in catalog.get_entries() if e.group}
         )
-        subscribed_keys: set[tuple[str, str]] | None = None
-        if (
-            settings.user_subscriptions_enabled
-            and user is not None
-            and subscription_store is not None
-        ):
-            subscribed_keys = subscription_store.subscribed_keys(user)
 
         items = []
         for entry in catalog.get_entries():
             subscribed = None
-            if subscribed_keys is not None:
-                subscribed = (entry.type, entry.name) in subscribed_keys
+            if user is not None and subscription_store is not None:
+                subscribed = subscription_store.is_visible(
+                    user, entry.type, entry.name, group=entry.group
+                )
             items.append(_entry_to_dict(entry, subscribed=subscribed))
+
+        if user is not None and subscription_store is not None:
+            subscribed_groups = sorted(subscription_store.subscribed_groups(user))
 
         payload = {
             "items": items,
             "server": _catalog_server_payload(settings),
             "subscriptions_enabled": settings.user_subscriptions_enabled,
             "user": user,
+            "subscribed_groups": subscribed_groups,
+            "available_groups": available_groups,
         }
         return JSONResponse(payload)
 
@@ -249,19 +287,19 @@ def _register_catalog_routes(
         )
         if entry is None:
             return JSONResponse({"error": "not found"}, status_code=404)
-        user = (
-            user_from_request(request, settings.user_header)
-            if settings.user_subscriptions_enabled
-            else None
-        )
+        user = None
+        if settings.user_subscriptions_enabled and subscription_coordinator is not None:
+            user = subscription_coordinator.http_user(request)
+        elif settings.user_subscriptions_enabled:
+            user = user_from_request(request, settings.user_header)
         subscribed = None
         if (
             user is not None
             and subscription_store is not None
             and settings.user_subscriptions_enabled
         ):
-            subscribed = subscription_store.is_subscribed(
-                user, entry.type, entry.name
+            subscribed = subscription_store.is_visible(
+                user, entry.type, entry.name, group=entry.group
             )
         return JSONResponse(_entry_to_dict(entry, subscribed=subscribed))
 
@@ -314,7 +352,13 @@ def _register_catalog_routes(
         _register_feedback_routes(mcp, feedback_store)
 
     if subscription_store is not None and settings.user_subscriptions_enabled:
-        _register_subscription_routes(mcp, settings, subscription_store, catalog)
+        _register_subscription_routes(
+            mcp,
+            settings,
+            subscription_store,
+            catalog,
+            subscription_coordinator,
+        )
 
     if eval_store is not None and settings.eval_results_project:
         _register_eval_results_routes(mcp, settings, eval_store)
@@ -337,9 +381,14 @@ def _register_subscription_routes(
     settings: Settings,
     store: UserSubscriptionStore,
     catalog: CatalogProvider,
+    coordinator: SubscriptionCoordinator | None,
 ) -> None:
     def _require_user(request: Request) -> str | JSONResponse:
-        user = user_from_request(request, settings.user_header)
+        user = (
+            coordinator.http_user(request)
+            if coordinator is not None
+            else user_from_request(request, settings.user_header)
+        )
         if user is None:
             return JSONResponse(
                 {"error": "identity header required"},
@@ -354,14 +403,21 @@ def _register_subscription_routes(
             if e.group == group
         ]
 
+    def _all_groups() -> list[str]:
+        return sorted({e.group for e in catalog.get_entries() if e.group})
+
     @mcp.custom_route("/api/subscriptions", methods=["GET"])
     async def subscriptions_list(request: Request) -> JSONResponse:
         user = _require_user(request)
         if isinstance(user, JSONResponse):
             return user
         items = store.list_for_user(user)
+        groups = store.list_groups_for_user(user)
         return JSONResponse(
-            {"items": [subscription_to_dict(item) for item in items]}
+            {
+                "items": [subscription_to_dict(item) for item in items],
+                "groups": [group_subscription_to_dict(g) for g in groups],
+            }
         )
 
     @mcp.custom_route("/api/subscriptions", methods=["POST"])
@@ -381,11 +437,26 @@ def _register_subscription_routes(
         if item_type not in ITEM_TYPES or not item_name:
             return JSONResponse({"error": "invalid item"}, status_code=400)
 
-        if catalog.get_entry(item_type, item_name) is None:
+        entry = catalog.get_entry(item_type, str(item_name))
+        if entry is None:
             return JSONResponse({"error": "not found"}, status_code=404)
 
-        store.add(user, item_type, str(item_name))
+        store.add_item(user, item_type, str(item_name))
         return JSONResponse({"status": "subscribed"})
+
+    @mcp.custom_route("/api/subscriptions/groups", methods=["POST"])
+    async def subscriptions_add_all_groups(request: Request) -> JSONResponse:
+        user = _require_user(request)
+        if isinstance(user, JSONResponse):
+            return user
+        groups = _all_groups()
+        if not groups:
+            return JSONResponse({"error": "no groups available"}, status_code=404)
+        count = store.add_groups(user, groups)
+        for group in groups:
+            members = _group_members(group)
+            store.clear_group_exclusions(user, members)
+        return JSONResponse({"status": "subscribed", "count": count})
 
     @mcp.custom_route(
         "/api/subscriptions/group/{group}", methods=["POST"]
@@ -398,7 +469,8 @@ def _register_subscription_routes(
         members = _group_members(group)
         if not members:
             return JSONResponse({"error": "group not found"}, status_code=404)
-        store.add_many(user, members)
+        store.add_group(user, group)
+        store.clear_group_exclusions(user, members)
         return JSONResponse({"status": "subscribed", "count": len(members)})
 
     @mcp.custom_route(
@@ -412,7 +484,8 @@ def _register_subscription_routes(
         members = _group_members(group)
         if not members:
             return JSONResponse({"error": "group not found"}, status_code=404)
-        store.remove_many(user, members)
+        store.remove_group(user, group)
+        store.clear_group_exclusions(user, members)
         return JSONResponse({"status": "unsubscribed", "count": len(members)})
 
     @mcp.custom_route(
@@ -426,7 +499,9 @@ def _register_subscription_routes(
         item_name = request.path_params["item_name"]
         if item_type not in ITEM_TYPES:
             return JSONResponse({"error": "invalid item type"}, status_code=400)
-        store.remove(user, item_type, item_name)
+        entry = catalog.get_entry(item_type, item_name)
+        group = entry.group if entry is not None else None
+        store.remove_item(user, item_type, item_name, group=group)
         return JSONResponse({"status": "unsubscribed"})
 
 

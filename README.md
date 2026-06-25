@@ -245,13 +245,19 @@ your auth mesh).
 
 - **Flag off** — unchanged behaviour; everything is published to every caller.
 - **Flag on, no identity header** — MCP exposes everything; UI controls are disabled.
-- **Flag on, identity present, no opt-ins** — pure opt-in: MCP returns nothing
-  until the user subscribes via the catalog UI or HTTP API.
+- **Flag on, identity present, first sighting** — user is logged in `user_seen` and
+  automatically subscribed to every catalog group (MCP and HTTP). They can still
+  opt out of individual items or whole groups afterwards.
 - **HTTP API** — `GET`/`POST /api/subscriptions`, `DELETE /api/subscriptions/{type}/{name}`,
-  and group snapshot routes `POST`/`DELETE /api/subscriptions/group/{group}`.
+  group routes `POST`/`DELETE /api/subscriptions/group/{group}`, and
+  `POST /api/subscriptions/groups` to re-subscribe every catalog group.
 - **`group` frontmatter** — optional string on `SKILL.md` / `PROMPT.md`; surfaced in
-  `/catalog` JSON and the catalog **Group** filter row with bulk opt-in/out.
-- **SQLite** auto-creates the `user_subscription` table locally; **Postgres**
+  `/catalog` JSON and the catalog **Group** filter row. Group opt-ins are stored in
+  `user_group_subscription` so new skills added to a followed group are included
+  automatically; users can still opt out of individual items within a group via
+  `user_subscription_exclusion`.
+- **SQLite** auto-creates `user_subscription`, `user_group_subscription`,
+  `user_subscription_exclusion`, and `user_seen` locally; **Postgres**
   consumers must ship a SyncDB migration (same caveat as `feedback`).
 
 MCP clients cache `tools/list` / `prompts/list` — subscription changes take
