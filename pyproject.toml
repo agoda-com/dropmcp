@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "dropmcp"
-version = "0.3.0"
+version = "0.4.0"
 description = "Drop a skills/ and prompts/ folder, get a FastMCP server with a browseable catalog UI."
 readme = "README.md"
 requires-python = ">=3.11"
