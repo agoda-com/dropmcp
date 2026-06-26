@@ -27,7 +27,16 @@ FRONTMATTER_RE = re.compile(r"^---\s*\n(.*?)\n---\s*\n", re.DOTALL)
 
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".svg", ".webp"}
 
-_RESOURCE_EXCLUDED_EXTENSIONS = (".ttf", ".otf", ".woff", ".woff2")
+_RESOURCE_EXCLUDED_EXTENSIONS = (
+    ".ttf",
+    ".otf",
+    ".woff",
+    ".woff2",
+    ".html",
+    ".htm",
+    ".xhtml",
+    ".svg",
+)
 
 
 def _main_file_for_type(item_type: str) -> str:
@@ -339,12 +348,19 @@ class CatalogProvider:
         entry = self.get_entry(item_type, name)
         if entry is None:
             return None
-        allowed = {
-            (entry.item_dir / rf.path).resolve()
-            for rf in self.list_resource_files(item_type, name)
-        }
+        if not relpath or relpath in (".", ".."):
+            return None
+        posix_relpath = relpath.replace("\\", "/")
+        main_file = _main_file_for_type(entry.type)
+        if not is_agent_facing_resource(posix_relpath, main_file):
+            return None
+        item_dir = entry.item_dir.resolve()
         candidate = (entry.item_dir / relpath).resolve()
-        if candidate not in allowed or not candidate.is_file():
+        try:
+            candidate.relative_to(item_dir)
+        except ValueError:
+            return None
+        if not candidate.is_file():
             return None
         return candidate
 

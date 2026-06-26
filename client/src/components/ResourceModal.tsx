@@ -1,6 +1,6 @@
 import { useEffect, useRef, lazy, Suspense, useState } from 'react';
 import { fetchResourceContent, type SkillResource } from '../api/catalog';
-import { isMarkdownPath, languageFromPath } from '../utils/languageFromPath';
+import { isMarkdownPath, fencedCodeBlock } from '../utils/languageFromPath';
 import LoadingSpinner from './LoadingSpinner';
 import styles from './ResourceModal.module.css';
 
@@ -42,7 +42,7 @@ export default function ResourceModal({ resource, onClose }: ResourceModalProps)
   const markdownContent = content
     ? isMarkdownPath(resource.path)
       ? content
-      : `\`\`\`${languageFromPath(resource.path)}\n${content}\n\`\`\``
+      : fencedCodeBlock(content, resource.path)
     : '';
 
   return (

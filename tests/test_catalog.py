@@ -350,6 +350,8 @@ def test_list_resource_files_excludes_main_catalog_fonts_dotfiles(tmp_path):
     (scripts / "run.py").write_text("print('hi')", encoding="utf-8")
     (skill_dir / ".hidden").write_text("secret", encoding="utf-8")
     (skill_dir / "font.woff2").write_bytes(b"font")
+    (skill_dir / "evil.html").write_text("<script>alert(1)</script>", encoding="utf-8")
+    (skill_dir / "icon.svg").write_text('<svg><script>alert(1)</script></svg>', encoding="utf-8")
     catalog = skill_dir / "catalog"
     catalog.mkdir()
     (catalog / "hero.png").write_bytes(b"\x89PNG")
@@ -425,8 +427,21 @@ async def test_catalog_detail_includes_content_and_resource_route(tmp_path):
 
         resource = client.get("/catalog/skill/demo/resource/scripts/helper.py")
         assert resource.status_code == 200
+        assert resource.headers["content-type"].startswith("text/plain")
+        assert resource.headers["x-content-type-options"] == "nosniff"
         assert "def help" in resource.text
 
         missing = client.get("/catalog/skill/demo/resource/../../SKILL.md")
         assert missing.status_code == 404
+
+        spaced = skill_dir / "my notes.py"
+        spaced.write_text("x = 1\n", encoding="utf-8")
+        detail2 = client.get("/catalog/skill/demo")
+        resource_url = next(
+            r["url"] for r in detail2.json()["resources"] if r["path"] == "my notes.py"
+        )
+        assert "%20" in resource_url
+        spaced_resource = client.get(resource_url)
+        assert spaced_resource.status_code == 200
+        assert spaced_resource.text == "x = 1\n"
 

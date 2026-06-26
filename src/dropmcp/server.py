@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import base64
 import mimetypes
+import urllib.parse
 from importlib import resources
 from pathlib import Path
 
@@ -93,7 +94,7 @@ def _entry_to_dict(
             {
                 "path": rf.path,
                 "name": Path(rf.path).name,
-                "url": f"{prefix}/resource/{rf.path}",
+                "url": f"{prefix}/resource/{urllib.parse.quote(rf.path, safe='/')}",
                 "mime_type": rf.mime_type,
             }
             for rf in catalog.list_resource_files(entry.type, entry.name)
@@ -104,6 +105,15 @@ def _entry_to_dict(
 def _file_response(path: Path) -> FileResponse:
     mime = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
     return FileResponse(path, media_type=mime)
+
+
+def _resource_file_response(path: Path) -> FileResponse:
+    """Serve skill resources as plain text so browsers never render HTML/SVG inline."""
+    return FileResponse(
+        path,
+        media_type="text/plain; charset=utf-8",
+        headers={"X-Content-Type-Options": "nosniff"},
+    )
 
 
 def _resolve_eval_results_store(settings: Settings) -> EvalResultsStore | None:
@@ -333,7 +343,7 @@ def _register_catalog_routes(
         )
         if path is None:
             return JSONResponse({"error": "not found"}, status_code=404)
-        return _file_response(path)
+        return _resource_file_response(path)
 
     @mcp.custom_route("/catalog/{item_type}/{name}/hero", methods=["GET"])
     async def catalog_hero(request: Request) -> FileResponse | JSONResponse:
