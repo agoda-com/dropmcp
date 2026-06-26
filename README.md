@@ -16,6 +16,26 @@ dropmcp.run(skills="skills", prompts="prompts")
 `dropmcp` is the reusable, repo-agnostic engine behind several internal
 skills/prompts MCP servers, extracted as a standalone library.
 
+## Features
+
+- **Browseable skill catalog** — a built-in web UI to search, filter, and
+  preview every skill and prompt, with copy-paste install snippets for each MCP
+  client.
+- **Zero-boilerplate server** — point it at a `skills/` and `prompts/` folder
+  and get a tested FastMCP server over streamable-HTTP.
+- **Filesystem as source of truth** — skills and prompts are just markdown with
+  YAML frontmatter; no registry to drift out of sync.
+- **Observability built in** — per-invocation structured logs plus optional
+  OpenTelemetry metrics and traces.
+- **Agent feedback loop** — a `record_feedback` tool and triage UI for when
+  agents get corrected.
+- **Per-user subscriptions** — optional opt-in so each user's agent sees only a
+  curated subset of the catalog.
+
+<div align="center">
+  <img src="docs/images/catalog.png" alt="Drop MCP browseable skill catalog" width="800" />
+</div>
+
 ## Why dropmcp?
 
 Skills and prompts are just markdown — anyone can write them, and there are
