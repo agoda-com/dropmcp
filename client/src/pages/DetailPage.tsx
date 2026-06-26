@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { fetchCatalogItem, type CatalogItem } from '../api/catalog';
 import ScreenshotGallery from '../components/ScreenshotGallery';
+import SkillContentSection from '../components/SkillContentSection';
+import ResourcesSection from '../components/ResourcesSection';
 import TelemetryPanel from '../components/TelemetryPanel';
 import { ErrorState } from '../components/CatalogGrid';
 import { formatName } from '../utils/format';
@@ -66,6 +68,13 @@ export default function DetailPage() {
 
         {examples.length > 0 && (
           <ExamplesSection examples={examples} />
+        )}
+
+        {item.type === 'skill' && item.content_markdown && (
+          <SkillContentSection markdown={item.content_markdown} />
+        )}
+        {item.type === 'skill' && (item.resources?.length ?? 0) > 0 && (
+          <ResourcesSection resources={item.resources!} />
         )}
 
         <TelemetryPanel itemName={item.name} />

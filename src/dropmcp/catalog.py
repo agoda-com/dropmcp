@@ -7,6 +7,7 @@ Prompts: prompts/{prompt-name}/PROMPT.md with optional catalog/ assets.
 from __future__ import annotations
 
 import logging
+import mimetypes
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -25,6 +26,43 @@ EXAMPLES_DIR = "examples"
 FRONTMATTER_RE = re.compile(r"^---\s*\n(.*?)\n---\s*\n", re.DOTALL)
 
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".svg", ".webp"}
+
+_RESOURCE_EXCLUDED_EXTENSIONS = (
+    ".ttf",
+    ".otf",
+    ".woff",
+    ".woff2",
+    ".html",
+    ".htm",
+    ".xhtml",
+    ".svg",
+)
+
+
+def _main_file_for_type(item_type: str) -> str:
+    return SKILL_FILE if item_type.lower() == "skill" else PROMPT_FILE
+
+
+def is_agent_facing_resource(relpath: str, main_file: str) -> bool:
+    """Whether a relative path is an agent-facing supporting file.
+
+    Shared by the catalog HTTP API and MCP skill tool resource links.
+    """
+    if relpath == main_file:
+        return False
+    if relpath.startswith("catalog/"):
+        return False
+    if relpath.lower().endswith(_RESOURCE_EXCLUDED_EXTENSIONS):
+        return False
+    if any(part.startswith(".") for part in relpath.split("/")):
+        return False
+    return True
+
+
+@dataclass(frozen=True)
+class ResourceFile:
+    path: str
+    mime_type: str
 
 
 def _find_image(directory: Path, stem: str) -> Path | None:
@@ -265,6 +303,66 @@ class CatalogProvider:
         catalog_dir = entry.dir_path
         examples = catalog_dir / EXAMPLES_DIR
         return _safe_file_in_subdir(examples, filename)
+
+    def read_main_markdown(self, item_type: str, name: str) -> str | None:
+        entry = self.get_entry(item_type, name)
+        if entry is None:
+            return None
+        main_file = _main_file_for_type(entry.type)
+        main_path = entry.item_dir / main_file
+        if not main_path.is_file():
+            return None
+        raw = main_path.read_text(encoding="utf-8")
+        match = FRONTMATTER_RE.match(raw)
+        body = raw[match.end() :].strip() if match else raw.strip()
+        return body or None
+
+    def list_resource_files(self, item_type: str, name: str) -> list[ResourceFile]:
+        entry = self.get_entry(item_type, name)
+        if entry is None:
+            return []
+        main_file = _main_file_for_type(entry.type)
+        item_dir = entry.item_dir.resolve()
+        files: list[ResourceFile] = []
+        for path in sorted(item_dir.rglob("*")):
+            if not path.is_file():
+                continue
+            try:
+                relpath = path.resolve().relative_to(item_dir).as_posix()
+            except ValueError:
+                continue
+            if not is_agent_facing_resource(relpath, main_file):
+                continue
+            mime, _ = mimetypes.guess_type(relpath)
+            files.append(
+                ResourceFile(
+                    path=relpath,
+                    mime_type=mime or "application/octet-stream",
+                )
+            )
+        return sorted(files, key=lambda rf: rf.path)
+
+    def resolve_resource_path(
+        self, item_type: str, name: str, relpath: str
+    ) -> Path | None:
+        entry = self.get_entry(item_type, name)
+        if entry is None:
+            return None
+        if not relpath or relpath in (".", ".."):
+            return None
+        posix_relpath = relpath.replace("\\", "/")
+        main_file = _main_file_for_type(entry.type)
+        if not is_agent_facing_resource(posix_relpath, main_file):
+            return None
+        item_dir = entry.item_dir.resolve()
+        candidate = (entry.item_dir / relpath).resolve()
+        try:
+            candidate.relative_to(item_dir)
+        except ValueError:
+            return None
+        if not candidate.is_file():
+            return None
+        return candidate
 
     def resolve_thumbnail_path(self, item_type: str, name: str) -> Path | None:
         """Resolve thumbnail with fallback: thumbnail.* -> hero.* -> defaults/{category}.* -> defaults/default.svg"""
