@@ -1,3 +1,10 @@
+export interface SkillResource {
+  path: string;
+  name: string;
+  url: string;
+  mime_type: string;
+}
+
 export interface CatalogItem {
   name: string;
   type: 'skill' | 'prompt';
@@ -14,6 +21,8 @@ export interface CatalogItem {
   screenshots: string[];
   examples: string[];
   subscribed?: boolean;
+  content_markdown?: string | null;
+  resources?: SkillResource[];
 }
 
 export interface CatalogServer {
@@ -63,6 +72,12 @@ export async function fetchCatalogItem(
   const res = await fetch(`/catalog/${type}/${name}`);
   if (!res.ok) throw new Error(`Item not found (${res.status}).`);
   return res.json();
+}
+
+export async function fetchResourceContent(url: string): Promise<string> {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Could not load resource (${res.status}).`);
+  return res.text();
 }
 
 export interface TelemetryResult {

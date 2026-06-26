@@ -59,7 +59,13 @@ def _catalog_server_payload(settings: Settings) -> dict:
     }
 
 
-def _entry_to_dict(entry, *, subscribed: bool | None = None) -> dict:
+def _entry_to_dict(
+    entry,
+    catalog: CatalogProvider,
+    *,
+    subscribed: bool | None = None,
+    include_content: bool = False,
+) -> dict:
     prefix = f"/catalog/{entry.type}/{entry.name}"
     payload = {
         "name": entry.name,
@@ -81,6 +87,17 @@ def _entry_to_dict(entry, *, subscribed: bool | None = None) -> dict:
     }
     if subscribed is not None:
         payload["subscribed"] = subscribed
+    if include_content:
+        payload["content_markdown"] = catalog.read_main_markdown(entry.type, entry.name)
+        payload["resources"] = [
+            {
+                "path": rf.path,
+                "name": Path(rf.path).name,
+                "url": f"{prefix}/resource/{rf.path}",
+                "mime_type": rf.mime_type,
+            }
+            for rf in catalog.list_resource_files(entry.type, entry.name)
+        ]
     return payload
 
 
@@ -265,7 +282,7 @@ def _register_catalog_routes(
                 subscribed = subscription_store.is_visible(
                     user, entry.type, entry.name, group=entry.group
                 )
-            items.append(_entry_to_dict(entry, subscribed=subscribed))
+            items.append(_entry_to_dict(entry, catalog, subscribed=subscribed))
 
         if user is not None and subscription_store is not None:
             subscribed_groups = sorted(subscription_store.subscribed_groups(user))
@@ -301,7 +318,22 @@ def _register_catalog_routes(
             subscribed = subscription_store.is_visible(
                 user, entry.type, entry.name, group=entry.group
             )
-        return JSONResponse(_entry_to_dict(entry, subscribed=subscribed))
+        return JSONResponse(
+            _entry_to_dict(entry, catalog, subscribed=subscribed, include_content=True)
+        )
+
+    @mcp.custom_route(
+        "/catalog/{item_type}/{name}/resource/{path:path}", methods=["GET"]
+    )
+    async def catalog_resource(request: Request) -> FileResponse | JSONResponse:
+        path = catalog.resolve_resource_path(
+            request.path_params["item_type"],
+            request.path_params["name"],
+            request.path_params["path"],
+        )
+        if path is None:
+            return JSONResponse({"error": "not found"}, status_code=404)
+        return _file_response(path)
 
     @mcp.custom_route("/catalog/{item_type}/{name}/hero", methods=["GET"])
     async def catalog_hero(request: Request) -> FileResponse | JSONResponse:

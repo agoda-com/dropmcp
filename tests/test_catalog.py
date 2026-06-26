@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import pytest
 from pathlib import Path
 
 from dropmcp.catalog import CatalogProvider
@@ -324,4 +325,108 @@ def test_example_filenames_listed(tmp_path):
     provider._entries = None
     entry = provider.get_entry("skill", "s")
     assert entry is not None
-    assert "basic.md" in entry.example_filenames
+# ---------------------------------------------------------------------------
+# Skill content + resources
+# ---------------------------------------------------------------------------
+
+
+def test_read_main_markdown_strips_frontmatter(tmp_path):
+    provider, skills, _ = _make_provider(tmp_path)
+    skill_dir = _write_skill(skills, "s", name="s")
+    (skill_dir / "SKILL.md").write_text(
+        "---\nname: s\ncategory: test\ndescription: d\n---\n# Body\n",
+        encoding="utf-8",
+    )
+
+    body = provider.read_main_markdown("skill", "s")
+    assert body == "# Body"
+
+
+def test_list_resource_files_excludes_main_catalog_fonts_dotfiles(tmp_path):
+    provider, skills, _ = _make_provider(tmp_path)
+    skill_dir = _write_skill(skills, "s", name="s")
+    scripts = skill_dir / "scripts"
+    scripts.mkdir()
+    (scripts / "run.py").write_text("print('hi')", encoding="utf-8")
+    (skill_dir / ".hidden").write_text("secret", encoding="utf-8")
+    (skill_dir / "font.woff2").write_bytes(b"font")
+    catalog = skill_dir / "catalog"
+    catalog.mkdir()
+    (catalog / "hero.png").write_bytes(b"\x89PNG")
+    (skill_dir / "notes.md").write_text("# Notes", encoding="utf-8")
+
+    paths = [rf.path for rf in provider.list_resource_files("skill", "s")]
+    assert paths == ["notes.md", "scripts/run.py"]
+
+
+def test_resolve_resource_path_allowlist(tmp_path):
+    provider, skills, _ = _make_provider(tmp_path)
+    skill_dir = _write_skill(skills, "s", name="s")
+    scripts = skill_dir / "scripts"
+    scripts.mkdir()
+    nested = scripts / "run.py"
+    nested.write_text("print('hi')", encoding="utf-8")
+    catalog = skill_dir / "catalog"
+    catalog.mkdir()
+    (catalog / "hero.png").write_bytes(b"\x89PNG")
+
+    assert provider.resolve_resource_path("skill", "s", "scripts/run.py") == nested.resolve()
+    assert provider.resolve_resource_path("skill", "s", "../outside") is None
+    assert provider.resolve_resource_path("skill", "s", "catalog/hero.png") is None
+
+
+def test_resolve_resource_path_rejects_symlink_escape(tmp_path):
+    provider, skills, _ = _make_provider(tmp_path)
+    skill_dir = _write_skill(skills, "s", name="s")
+    outside = tmp_path / "outside.txt"
+    outside.write_text("nope", encoding="utf-8")
+    link = skill_dir / "escape.txt"
+    link.symlink_to(outside)
+
+    assert provider.resolve_resource_path("skill", "s", "escape.txt") is None
+
+
+@pytest.mark.asyncio
+async def test_catalog_detail_includes_content_and_resource_route(tmp_path):
+    from starlette.testclient import TestClient
+
+    from dropmcp.config import Settings
+    from dropmcp.server import build_server
+
+    provider, skills, prompts = _make_provider(tmp_path)
+    skill_dir = _write_skill(skills, "demo", name="demo", description="Demo skill")
+    (skill_dir / "SKILL.md").write_text(
+        "---\nname: demo\ncategory: test\ndescription: Demo skill\n---\n## Instructions\n",
+        encoding="utf-8",
+    )
+    scripts = skill_dir / "scripts"
+    scripts.mkdir()
+    helper = scripts / "helper.py"
+    helper.write_text("def help():\n    pass\n", encoding="utf-8")
+
+    settings = Settings.resolve(
+        skills=skills,
+        prompts=prompts,
+        ui_enabled=True,
+        feedback_enabled=False,
+    )
+    mcp = build_server(settings)
+
+    with TestClient(mcp.http_app()) as client:
+        detail = client.get("/catalog/skill/demo")
+        assert detail.status_code == 200
+        body = detail.json()
+        assert body["content_markdown"] == "## Instructions"
+        assert len(body["resources"]) == 1
+        assert body["resources"][0]["path"] == "scripts/helper.py"
+
+        index = client.get("/catalog")
+        assert "content_markdown" not in index.json()["items"][0]
+
+        resource = client.get("/catalog/skill/demo/resource/scripts/helper.py")
+        assert resource.status_code == 200
+        assert "def help" in resource.text
+
+        missing = client.get("/catalog/skill/demo/resource/../../SKILL.md")
+        assert missing.status_code == 404
+

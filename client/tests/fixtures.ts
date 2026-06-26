@@ -16,6 +16,15 @@ export const MOCK_ITEMS: CatalogItem[] = [
     hero_url: null,
     screenshots: [],
     examples: [],
+    content_markdown: '## Hello\n\nUse this skill for testing.\n\n```python\nprint("hi")\n```',
+    resources: [
+      {
+        path: 'scripts/run.py',
+        name: 'run.py',
+        url: '/catalog/skill/hello-world/resource/scripts/run.py',
+        mime_type: 'text/x-python',
+      },
+    ],
   },
   {
     name: 'code-review',
