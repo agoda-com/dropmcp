@@ -556,6 +556,7 @@ def _register_feedback_routes(mcp: FastMCP, store: FeedbackStore) -> None:
             model=params.get("model"),
             client=params.get("client"),
             skill_name=params.get("skill_name"),
+            feedback_type=params.get("feedback_type"),
             status=params.get("status"),
         )
         return JSONResponse({"items": [feedback_to_dict(item) for item in items]})

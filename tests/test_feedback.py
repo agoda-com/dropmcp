@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sqlite3
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -39,6 +40,38 @@ def test_insert_and_list(store):
     assert item.status == "new"
     assert item.client == "cursor"
     assert item.skill_name == "agent-feedback"
+    assert item.feedback_type == "correction"
+    assert item.details is None
+
+
+def test_insert_and_list_agent_work_details(store):
+    details = {
+        "work_type": "script_created",
+        "summary": "Created a validator helper.",
+        "artifacts": [
+            {
+                "kind": "script",
+                "action": "created",
+                "path": "scripts/validate.py",
+                "language": "python",
+                "content": "print('ok')\n",
+            }
+        ],
+    }
+
+    entry_id = store.insert(
+        feedback_type="agent_work",
+        feedback="Created a reusable validator after invoking a skill.",
+        better_instruction="Include a validator script in the skill.",
+        model="gpt-5.3-codex",
+        skill_name="migration-skill",
+        details=details,
+    )
+
+    item = store.get(entry_id)
+    assert item is not None
+    assert item.feedback_type == "agent_work"
+    assert item.details == details
 
 
 def test_list_search_filter(store):
@@ -58,7 +91,26 @@ def test_list_search_filter(store):
     assert len(store.list(search="null branch")) == 1
     assert len(store.list(model="gpt-5.3-codex")) == 1
     assert len(store.list(client="claude-cli")) == 1
+    assert len(store.list(feedback_type="correction")) == 2
     assert len(store.list(status="new")) == 2
+
+
+def test_list_feedback_type_filter(store):
+    store.insert(
+        feedback="Correction.",
+        better_instruction="Do the correction.",
+        model="m",
+    )
+    store.insert(
+        feedback="Agent work.",
+        better_instruction="Add reusable skill asset.",
+        model="m",
+        feedback_type="agent_work",
+    )
+
+    agent_work = store.list(feedback_type="agent_work")
+    assert len(agent_work) == 1
+    assert agent_work[0].feedback == "Agent work."
 
 
 def test_patch_status_and_resolution(store):
@@ -106,6 +158,8 @@ def test_feedback_to_dict_iso_dates(store):
     data = feedback_to_dict(item)
     assert data["created_at"].endswith("Z")
     assert data["id"] == entry_id
+    assert data["feedback_type"] == "correction"
+    assert data["details"] is None
 
 
 @pytest.mark.asyncio
@@ -124,6 +178,42 @@ async def test_record_feedback_tool_writes_row(store):
     )
     assert "recorded" in result.content[0].text.lower()
     assert len(store.list()) == 1
+
+
+@pytest.mark.asyncio
+async def test_record_feedback_tool_writes_agent_work_details(store):
+    provider = FeedbackProvider(store)
+    tool = await provider._get_tool("record_feedback")
+    assert tool is not None
+
+    details = {
+        "work_type": "script_created",
+        "artifacts": [
+            {
+                "kind": "script",
+                "action": "created",
+                "path": "scripts/check.py",
+                "language": "python",
+                "content": "print('check')\n",
+            }
+        ],
+    }
+    result = await tool.run(
+        {
+            "feedback_type": "agent_work",
+            "feedback": "Created a reusable checker after invoking a skill.",
+            "better_instruction": "Provide the checker script in the skill.",
+            "model": "gpt-5.3-codex",
+            "skill_name": "example-skill",
+            "details": details,
+        }
+    )
+
+    assert "recorded" in result.content[0].text.lower()
+    item = store.list()[0]
+    assert item.feedback_type == "agent_work"
+    assert item.skill_name == "example-skill"
+    assert item.details == details
 
 
 @pytest.mark.asyncio
@@ -182,3 +272,44 @@ def test_feedback_store_create_all_only_for_sqlite(tmp_path):
     ):
         FeedbackStore("postgresql://user:pass@host/db")
         create_all.assert_not_called()
+
+
+def test_feedback_store_ensures_sqlite_columns_for_existing_db(tmp_path):
+    db_path = tmp_path / "old.db"
+    with sqlite3.connect(db_path) as conn:
+        conn.execute(
+            """
+            CREATE TABLE feedback (
+                id VARCHAR(36) PRIMARY KEY,
+                created_at DATETIME NOT NULL,
+                feedback TEXT NOT NULL,
+                better_instruction TEXT NOT NULL,
+                suggested_skill TEXT,
+                model VARCHAR(128) NOT NULL,
+                client VARCHAR(64),
+                repo VARCHAR(256),
+                status VARCHAR(16) NOT NULL,
+                resolution_url TEXT
+            )
+            """
+        )
+        conn.execute(
+            """
+            INSERT INTO feedback (
+                id, created_at, feedback, better_instruction, model, status
+            ) VALUES (
+                'old', '2026-06-17 10:00:00', 'Legacy row.', 'Default it.', 'm', 'new'
+            )
+            """
+        )
+
+    store = FeedbackStore(f"sqlite:///{db_path}")
+    item = store.list()[0]
+    assert item.id == "old"
+    assert item.skill_name is None
+    assert item.feedback_type == "correction"
+    assert item.details is None
+
+    with sqlite3.connect(db_path) as conn:
+        columns = {row[1] for row in conn.execute("PRAGMA table_info(feedback)")}
+    assert {"skill_name", "feedback_type", "details"} <= columns

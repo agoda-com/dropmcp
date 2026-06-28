@@ -1,4 +1,9 @@
-import { FEEDBACK_STATUSES, type FeedbackStatus } from '../api/feedback';
+import {
+  FEEDBACK_STATUSES,
+  FEEDBACK_TYPES,
+  type FeedbackStatus,
+  type FeedbackType,
+} from '../api/feedback';
 import styles from './FeedbackToolbar.module.css';
 
 interface Props {
@@ -6,6 +11,8 @@ interface Props {
   onSearchChange: (value: string) => void;
   statusFilter: FeedbackStatus | 'all';
   onStatusChange: (status: FeedbackStatus | 'all') => void;
+  typeFilter: FeedbackType | 'all';
+  onTypeChange: (type: FeedbackType | 'all') => void;
   models: string[];
   modelFilter: string | null;
   onModelChange: (model: string | null) => void;
@@ -19,6 +26,8 @@ export default function FeedbackToolbar({
   onSearchChange,
   statusFilter,
   onStatusChange,
+  typeFilter,
+  onTypeChange,
   models,
   modelFilter,
   onModelChange,
@@ -31,6 +40,8 @@ export default function FeedbackToolbar({
       <SearchField value={search} onChange={onSearchChange} />
 
       <StatusFilter value={statusFilter} onChange={onStatusChange} />
+
+      <TypeFilter value={typeFilter} onChange={onTypeChange} />
 
       {models.length > 0 && (
         <ValueFilter label="Model" values={models} selected={modelFilter} onChange={onModelChange} />
@@ -79,6 +90,30 @@ function StatusFilter({
           onClick={() => onChange(status)}
         >
           {status === 'all' ? 'All' : status}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function TypeFilter({
+  value,
+  onChange,
+}: {
+  value: FeedbackType | 'all';
+  onChange: (type: FeedbackType | 'all') => void;
+}) {
+  return (
+    <div className={styles.filterRow}>
+      <span className={styles.filterLabel}>Type</span>
+      {(['all', ...FEEDBACK_TYPES] as const).map((type) => (
+        <button
+          key={type}
+          type="button"
+          className={`${styles.pill} ${value === type ? styles.pillActive : ''}`}
+          onClick={() => onChange(type)}
+        >
+          {type === 'all' ? 'All' : type === 'agent_work' ? 'agent work' : type}
         </button>
       ))}
     </div>

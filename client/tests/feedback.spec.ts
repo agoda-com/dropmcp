@@ -18,10 +18,12 @@ function mockCatalogApi(page: Page) {
 function filterFeedback(items: FeedbackItem[], query: URLSearchParams): FeedbackItem[] {
   const search = query.get('search')?.toLowerCase();
   const status = query.get('status');
+  const feedbackType = query.get('feedback_type');
   const model = query.get('model');
   const client = query.get('client');
   return items.filter((item) => {
     if (status && item.status !== status) return false;
+    if (feedbackType && (item.feedback_type ?? 'correction') !== feedbackType) return false;
     if (model && item.model !== model) return false;
     if (client && item.client !== client) return false;
     if (search) {
@@ -66,7 +68,7 @@ test.describe('Feedback Page', () => {
     await page.goto('/feedback');
     await expect(page.getByRole('heading', { name: 'Agent feedback' })).toBeVisible();
     await expect(page.locator('article')).toHaveCount(MOCK_FEEDBACK.length);
-    await expect(page.getByText('react-component-layout')).toBeVisible();
+    await expect(page.getByText('ui-snapshot-helper')).toBeVisible();
     await expect(page).toHaveScreenshot('feedback-list.png');
   });
 
@@ -86,5 +88,17 @@ test.describe('Feedback Page', () => {
     await page.getByRole('button', { name: 'actioned', exact: true }).click();
     await expect(page.locator('article')).toHaveCount(1);
     await expect(page).toHaveScreenshot('feedback-filtered-actioned.png');
+  });
+
+  test('filters and expands agent-work details', async ({ page }) => {
+    await mockCatalogApi(page);
+    await mockFeedbackApi(page);
+    await page.goto('/feedback');
+    await page.getByRole('button', { name: 'agent work', exact: true }).click();
+    await expect(page.locator('article')).toHaveCount(1);
+
+    await page.getByText('Details').click();
+    await expect(page.getByText('scripts/stabilize_feedback_snapshots.ts')).toBeVisible();
+    await expect(page.getByText('stableFeedback')).toBeVisible();
   });
 });
