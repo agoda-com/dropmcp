@@ -135,6 +135,33 @@ async def test_record_feedback_tool_missing_fields(store):
     assert store.list() == []
 
 
+def test_feedback_provider_initializes_transforms(store):
+    provider = FeedbackProvider(store)
+    assert provider._transforms == []
+
+
+@pytest.mark.asyncio
+async def test_record_feedback_in_aggregated_tool_list(tmp_path):
+    from dropmcp.config import Settings
+    from dropmcp.server import build_server
+
+    skills = tmp_path / "skills"
+    prompts = tmp_path / "prompts"
+    skills.mkdir()
+    prompts.mkdir()
+
+    settings = Settings.resolve(
+        skills=skills,
+        prompts=prompts,
+        feedback_enabled=True,
+        database_url=f"sqlite:///{tmp_path / 'db'}",
+    )
+    mcp = build_server(settings)
+    tools = await mcp._list_tools()
+    names = {t.name for t in tools}
+    assert "record_feedback" in names
+
+
 def test_database_url_from_env(monkeypatch, tmp_path):
     db_path = tmp_path / "custom.db"
     monkeypatch.setenv("DROPMCP_DATABASE_URL", f"sqlite:///{db_path}")

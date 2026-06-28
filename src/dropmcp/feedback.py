@@ -324,6 +324,7 @@ class FeedbackProvider(Provider):
     """Registers the built-in ``record_feedback`` MCP tool."""
 
     def __init__(self, store: FeedbackStore) -> None:
+        super().__init__()
         self._store = store
         self._tool = RecordFeedbackTool.create(store)
 
