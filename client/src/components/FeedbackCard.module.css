@@ -43,6 +43,25 @@
   color: var(--brand-green);
 }
 
+.typeBadge {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+}
+
+.typeCorrection {
+  background: rgba(100, 116, 139, 0.14);
+  color: var(--color-text-muted);
+}
+
+.typeAgentWork {
+  background: rgba(175, 56, 177, 0.14);
+  color: var(--brand-purple);
+}
+
 .fieldLabel {
   display: block;
   font-size: 0.75rem;

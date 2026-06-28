@@ -1,130 +1,113 @@
 ### Recording feedback (always-on)
 
-When the user corrects you, that correction is the single most valuable artefact
-in the conversation — it is a real-world example of a gap in the skills, rules,
-or context that guide you. Today that lesson lives only inside one chat and is
-never seen again. Recording it makes it visible.
+Use the built-in **`record_feedback`** MCP tool to capture feedback that should
+improve future agent behaviour or skill assets. This is an always-on rule, not a
+normal task-triggered skill.
 
-After applying the user's correction, record a short, structured entry via the
-built-in **`record_feedback`** MCP tool. Patterns surface in the marketplace
-**Feedback** view, recurring failures become candidate skills, and curators get a
-searchable feedback loop instead of N private re-prompts.
+#### Feedback types
 
-This is not a normal task-triggered skill — it is an always-on behaviour. Treat
-it as a rule that is always loaded, not a tool you look up only when relevant.
+- `correction` — the user corrected your previous output, or asked for follow-up
+  work that should have been included in the first pass.
+- `agent_work` — after invoking a skill, you had to create or extend reusable
+  procedural work the skill should have provided.
 
-#### Why we record feedback
+#### Correction feedback
 
-Recording feedback is a learning act, not a punishment. The only failure is
-failing without learning. A correction the user had to type is a real-world gap
-in your skills or rules — capturing it is how the team gets better, and how *you*
-get better next time. Reach for the feedback; never rationalise away from it.
+Trigger `correction` feedback when your previous turn produced output (code, an
+answer, a plan, a file edit), and the user's new message is a correction of that
+output or asks for additional work that would change a file you just touched.
 
-#### When to trigger
+This includes reversals ("no", "undo"), redirection ("instead", "you should
+have"), rework ("fix it", "redo"), frustration about what you produced, scope
+expansion ("also handle", "you missed"), and partial correction ("good, except").
+If a thoughtful engineer would have included it in the first pass, record it.
 
-The single test:
+Do not record `correction` feedback when the new request is unrelated, is only a
+clarifying question, corrects the user's own earlier prompt, or is about external
+state you did not produce.
 
-> Your previous turn produced output (code, an answer, a plan, a file edit),
-> **and** the user's new message is either a correction of that output **or
-> a request for additional work that would change any file you just
-> touched.**
+If the correction is about a specific skill that was invoked or active, set
+`skill_name` to that skill's name.
 
-That one rule deliberately covers all of these — you do not need to
-pattern-match on phrases:
+#### Agent-work feedback
 
-- **Negation / reversal:** "no", "not like that", "undo", "revert that"
-- **Redirection:** "actually", "instead", "rather", "you should have"
-- **Rework:** "redo", "change that", "fix it", "try again"
-- **Frustration as feedback:** "wrong", "broken", "doesn't work" — *about
-  what you just produced*
-- **Scope expansion / refinement:** "now add tests", "also handle …",
-  "what about …", "tighten …", "make it more …", "you missed …",
-  "and also", "one more thing", "don't forget …"
-- **Partial correction:** "the first part is great, but the second part
-  missed X", "good, except …", "looks fine but you forgot …" — the praise
-  does not cancel the miss; record the missed part.
+After you invoke a skill, watch for reusable work the skill did not provide. If
+you create or extend a script, write a substantial command sequence, build a
+helper, checklist, or other procedural glue to complete the task, record
+`agent_work` feedback after the work is complete and before your final response.
+This is triggered by your own work, not by a user correction.
 
-If a thoughtful engineer would have included it in the first pass, it's a
-correction. Over-record. Curators will debounce; silence cannot be debounced.
+Do not record `agent_work` if no skill was invoked. Do not record ordinary code
+edits, test updates, or verification commands unless they are reusable
+procedural work that belongs in a skill.
 
-#### Do not trigger when
-
-The opt-outs are intentionally narrow. Only skip recording feedback when one of
-these is clearly true:
-
-- **A genuinely unrelated new task** — touches different files, different
-  feature, different domain, with no link to the work you just produced.
-- **A clarifying question about the work, not a change to the work** —
-  e.g. "why did you choose Postgres here?" with no implied "redo it".
-- **The user is correcting their own earlier prompt**, not your output.
-- The "correction" is about **external state** you didn't produce.
-
-**"The user is asking for more work" is not a valid opt-out** when that
-work would change a file you just touched.
-
-Otherwise, record on **every** correction — including chained corrections on
-the same theme within one conversation.
-
-#### What to do, in order
-
-1. **Apply the user's correction first.** Feedback is never a substitute for
-   the fix. If the correction takes time, do the work, then record.
-2. **Compose the feedback** following the format below.
-3. **Call `record_feedback`** with the structured fields.
-4. **Do not narrate the entry in the chat** unless the user asks. A single
-   sentence after the fix ("noted in feedback") is fine; a paragraph is not.
-
-#### Message format — non-negotiable
-
-Keep it brief. The feed must stay scannable.
-
-- **Max ~80 words** across feedback and better_instruction combined.
-- Required tool fields:
-  - **feedback** — what you got wrong, in one sentence.
-  - **better_instruction** — wording that would have prevented it. Phrase
-    it as something a skill or rule could say verbatim.
-  - **model** — the model you are running as (e.g. `claude-opus-4.8`,
-    `gpt-5.3-codex`). Use `unknown` if you genuinely cannot determine it.
-- Optional tool fields:
-  - **suggested_skill** — only when a clear pattern is plausible.
-  - **skill_name** — related skill/prompt if any.
-  - **repo** — high-level context only (e.g. "supply BFF"), not full paths.
-- No code blocks longer than 5 lines. Paraphrase if needed.
-- Tone: neutral and factual. Not apologetic, not defensive, not chatty.
-
-Example — scope expansion. *User after a code change:* "now add tests for the
-null branch."
+For scripts or procedural artifacts you wrote or extended, include useful
+supporting material in `details.artifacts` so maintainers can promote it into the
+skill:
 
 ```json
 {
-  "tool": "record_feedback",
-  "arguments": {
-    "feedback": "Shipped branching logic without tests for the null branch; user had to ask.",
-    "better_instruction": "When modifying branching logic, include tests for each branch in the same change.",
-    "suggested_skill": "tests-cover-each-branch",
-    "model": "gpt-5.3-codex"
+  "feedback_type": "agent_work",
+  "feedback": "After invoking the migration skill, I had to write a reusable validator script.",
+  "better_instruction": "When migration output needs validation, include or link a validator script in the skill.",
+  "model": "gpt-5.3-codex",
+  "skill_name": "example-migration-skill",
+  "details": {
+    "work_type": "script_created",
+    "artifacts": [
+      {
+        "kind": "script",
+        "action": "created",
+        "path": "scripts/validate_migration.py",
+        "language": "python",
+        "content": "... script content ..."
+      }
+    ]
   }
 }
 ```
 
-#### How to record — tooling
+For existing scripts that you extend, capture the final relevant content or a
+focused diff in `content`; avoid unrelated existing material when it is large or
+sensitive.
 
-Call the **`record_feedback`** MCP tool on this server. It is always available
-on dropmcp-based servers — no Slack, GitLab, or webhook setup required.
+#### How to record
 
-If the tool call fails, **do nothing else**. Do not warn the user, do not print
-the would-be message into the chat, do not retry on the next turn. The user's
-primary task — the fix you just applied — is what matters. A failed entry must
-never become noise in the conversation.
+Apply the correction or finish the reusable work first. Then call
+`record_feedback` with concise, high-signal fields:
+
+- `feedback` — what went wrong or what reusable skill gap you hit, in one
+  sentence.
+- `better_instruction` — wording that would have prevented the gap, phrased as a
+  reusable skill or rule.
+- `model` — the model you are running as; use `unknown` if needed.
+- `feedback_type` — omit for ordinary correction feedback, or set to
+  `agent_work` for skill-artifact feedback.
+- `skill_name` — the skill that was invoked or active when this feedback was
+  produced, when the feedback is about a specific skill.
+- `suggested_skill` — optional candidate new skill or rule name.
+- `repo` — optional high-level repo context, not full paths.
+- `details` — optional structured material for `agent_work`, especially scripts
+  in `details.artifacts`.
+
+Keep `feedback` and `better_instruction` brief. Do not narrate the entry in chat
+unless the user asks; a single sentence after the fix is enough.
+
+If the tool call fails, do nothing else. Do not warn the user, do not print the
+would-be entry, and do not retry on the next turn.
 
 #### Privacy guardrails
 
-The feedback store may be visible to your team in the catalog UI. Treat it that way.
+The feedback store may be visible to your team in the catalog UI. Treat it that
+way.
 
-- **Never paste user prompts or code verbatim.** Paraphrase.
-- **Never include secrets, tokens, customer data, PII, or proprietary algorithms.**
-- **Repo and file names** stay high-level; prefer "in a C# BFF" over full paths.
+- Never paste user prompts verbatim.
+- Never include secrets, tokens, customer data, PII, or unrelated proprietary
+  material.
+- For `correction` feedback, paraphrase code and prompts instead of copying
+  them.
+- For `agent_work`, include only reusable artifact content that is safe and
+  relevant to improving the skill.
 
-**If you're unsure whether to record feedback, record it.** Under-posting is the
-worst failure mode — a silent gap is invisible forever, but a borderline entry is
-sortable.
+If you are unsure whether to record feedback, record it. Curators can debounce a
+borderline entry; they cannot recover a silent gap.

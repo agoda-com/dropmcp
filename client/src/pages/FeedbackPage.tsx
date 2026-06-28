@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { fetchFeedback, type FeedbackItem, type FeedbackStatus } from '../api/feedback';
+import { fetchFeedback, type FeedbackItem, type FeedbackStatus, type FeedbackType } from '../api/feedback';
 import FeedbackHeader from '../components/FeedbackHeader';
 import FeedbackToolbar from '../components/FeedbackToolbar';
 import FeedbackList from '../components/FeedbackList';
@@ -11,6 +11,7 @@ export default function FeedbackPage() {
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<FeedbackStatus | 'all'>('all');
+  const [typeFilter, setTypeFilter] = useState<FeedbackType | 'all'>('all');
   const [modelFilter, setModelFilter] = useState<string | null>(null);
   const [clientFilter, setClientFilter] = useState<string | null>(null);
 
@@ -21,6 +22,7 @@ export default function FeedbackPage() {
       const data = await fetchFeedback({
         search: search.trim() || undefined,
         status: statusFilter === 'all' ? undefined : statusFilter,
+        feedback_type: typeFilter === 'all' ? undefined : typeFilter,
         model: modelFilter ?? undefined,
         client: clientFilter ?? undefined,
       });
@@ -30,7 +32,7 @@ export default function FeedbackPage() {
     } finally {
       setLoading(false);
     }
-  }, [search, statusFilter, modelFilter, clientFilter]);
+  }, [search, statusFilter, typeFilter, modelFilter, clientFilter]);
 
   useEffect(() => {
     const timer = setTimeout(load, search ? 250 : 0);
@@ -49,6 +51,8 @@ export default function FeedbackPage() {
         onSearchChange={setSearch}
         statusFilter={statusFilter}
         onStatusChange={setStatusFilter}
+        typeFilter={typeFilter}
+        onTypeChange={setTypeFilter}
         models={models}
         modelFilter={modelFilter}
         onModelChange={setModelFilter}

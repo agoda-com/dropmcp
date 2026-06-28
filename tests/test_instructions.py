@@ -209,3 +209,19 @@ def test_build_instructions_both_placeholders(tmp_path):
     result = build_server_instructions(tpl, skills, prompts)
     assert "Skill summary" in result
     assert "Prompt summary" in result
+
+
+def test_build_instructions_feedback_enabled_adds_agent_work_guidance(tmp_path):
+    skills = tmp_path / "skills"
+    prompts = tmp_path / "prompts"
+    skills.mkdir()
+    prompts.mkdir()
+
+    tpl = tmp_path / "INSTRUCTIONS.md"
+    tpl.write_text("Static instructions only.", encoding="utf-8")
+
+    result = build_server_instructions(tpl, skills, prompts, feedback_enabled=True)
+    assert result is not None
+    assert "feedback_type" in result
+    assert "agent_work" in result
+    assert "details.artifacts" in result

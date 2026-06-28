@@ -239,12 +239,34 @@ go to the console.
 
 ## Agent feedback
 
-dropmcp includes a built-in feedback loop for when agents get corrected:
+dropmcp includes a built-in feedback loop for when agents get corrected and for
+reusable work agents discover after invoking skills:
 
 - **`record_feedback` MCP tool** — agents write structured feedback (no external Slack/GitLab wiring).
 - **SQLite by default** — a `dropmcp.db` file is created next to your content folders on first run.
 - **Postgres override** — set `DROPMCP_DATABASE_URL=postgresql://user:pass@host/db` for durable hosted storage.
 - **Feedback UI** — browse, search, filter, and triage at `/feedback` in the catalog SPA (`GET`/`PATCH /api/feedback`).
+
+Feedback rows include `feedback_type` (`correction` by default, or `agent_work`),
+`skill_name` for the skill that was in use when feedback is about a specific
+skill, and optional structured `details`. `agent_work` entries can include
+reusable scripts or procedural artifacts under `details.artifacts`; script
+content is stored as JSON text and shown in an expandable UI panel.
+
+SQLite auto-creates the feedback table and lightly adds missing `skill_name`,
+`feedback_type`, and `details` columns for existing local databases. Postgres
+deployments must ship the equivalent SyncDB migration for any missing columns:
+
+```sql
+ALTER TABLE feedback
+  ADD COLUMN IF NOT EXISTS skill_name text,
+  ADD COLUMN IF NOT EXISTS feedback_type text NOT NULL DEFAULT 'correction',
+  ADD COLUMN IF NOT EXISTS details text;
+
+COMMENT ON COLUMN feedback.skill_name IS 'Skill that was invoked or active when the feedback was produced; null when feedback is not about a specific skill.';
+COMMENT ON COLUMN feedback.feedback_type IS 'Feedback category: correction for user corrections or agent_work for reusable work created after invoking a skill.';
+COMMENT ON COLUMN feedback.details IS 'Optional JSON-encoded supporting material for agent_work feedback, such as reusable artifacts.';
+```
 
 Privacy guardrails: no verbatim user prompts, code, secrets, or PII. When feedback
 is enabled, dropmcp injects always-on guidance into the server instructions
