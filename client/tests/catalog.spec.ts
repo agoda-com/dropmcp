@@ -1,7 +1,11 @@
 import { test, expect } from '@playwright/test';
+import type { CurrentUserIdentity } from '../src/api/catalog';
 import { MOCK_ITEMS, MOCK_SERVER } from './fixtures';
 
-function mockCatalogApi(page: import('@playwright/test').Page) {
+function mockCatalogApi(
+  page: import('@playwright/test').Page,
+  me?: CurrentUserIdentity,
+) {
   return page.route('**/catalog', (route) => {
     if (route.request().url().endsWith('/catalog')) {
       return route.fulfill({
@@ -10,6 +14,7 @@ function mockCatalogApi(page: import('@playwright/test').Page) {
         body: JSON.stringify({
           items: MOCK_ITEMS,
           server: MOCK_SERVER,
+          ...(me ? { me, user: me.email } : {}),
         }),
       });
     }
@@ -62,6 +67,26 @@ test.describe('Catalog Page', () => {
     await expect(page.getByText('Get Started — Install')).toBeVisible();
     await expect(page.getByRole('tab', { name: 'Cursor' })).toBeVisible();
     await expect(page).toHaveScreenshot('install-panel.png');
+  });
+
+  test('shows signed-in user in the footer', async ({ page }) => {
+    await mockCatalogApi(page, {
+      email: 'dev@example.com',
+      authenticated: true,
+    });
+    await page.goto('/');
+    await expect(page.locator('footer')).toContainText(
+      'Signed in as dev@example.com',
+    );
+  });
+
+  test('does not show identity line for anonymous users', async ({ page }) => {
+    await mockCatalogApi(page, {
+      email: null,
+      authenticated: false,
+    });
+    await page.goto('/');
+    await expect(page.locator('footer')).not.toContainText('Signed in as');
   });
 });
 

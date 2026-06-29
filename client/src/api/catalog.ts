@@ -31,9 +31,15 @@ export interface CatalogServer {
   icon_url: string | null;
 }
 
+export interface CurrentUserIdentity {
+  email: string | null;
+  authenticated: boolean;
+}
+
 interface CatalogResponse {
   items: CatalogItem[];
   server: CatalogServer;
+  me?: CurrentUserIdentity;
   subscriptions_enabled?: boolean;
   user?: string | null;
   subscribed_groups?: string[];
@@ -45,23 +51,48 @@ export async function fetchCatalog(): Promise<{
   server: CatalogServer;
   subscriptionsEnabled: boolean;
   user: string | null;
+  me: CurrentUserIdentity;
   subscribedGroups: string[];
   availableGroups: string[];
 }> {
   const res = await fetch('/catalog');
   if (!res.ok) throw new Error(`Could not load catalog (${res.status}).`);
   const data: CatalogResponse = await res.json();
+  const me = normalizeIdentity(data.me, data.user);
   return {
     items: Array.isArray(data.items) ? data.items : [],
     server: data.server ?? { name: 'Catalog', website_url: null, icon_url: null },
     subscriptionsEnabled: Boolean(data.subscriptions_enabled),
-    user: data.user ?? null,
+    user: me.email,
+    me,
     subscribedGroups: Array.isArray(data.subscribed_groups)
       ? data.subscribed_groups
       : [],
     availableGroups: Array.isArray(data.available_groups)
       ? data.available_groups
       : [],
+  };
+}
+
+export async function fetchCurrentUser(): Promise<CurrentUserIdentity> {
+  const res = await fetch('/api/me');
+  if (!res.ok) throw new Error(`Could not load current user (${res.status}).`);
+  const data: CurrentUserIdentity = await res.json();
+  return normalizeIdentity(data);
+}
+
+function normalizeIdentity(
+  identity?: Partial<CurrentUserIdentity>,
+  fallbackEmail?: string | null,
+): CurrentUserIdentity {
+  const email =
+    typeof identity?.email === 'string' && identity.email.trim()
+      ? identity.email.trim()
+      : fallbackEmail || null;
+  const authenticated = identity?.authenticated ?? Boolean(email);
+  return {
+    email,
+    authenticated: Boolean(authenticated && email),
   };
 }
 

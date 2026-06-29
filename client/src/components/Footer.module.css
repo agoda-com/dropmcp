@@ -28,6 +28,11 @@
   font-weight: 500;
 }
 
+.identity strong {
+  color: var(--color-text);
+  font-weight: 600;
+}
+
 .sha {
   font-family: var(--font-mono, monospace);
   font-size: 0.8rem;

@@ -277,6 +277,24 @@ to install. Disable the whole feature (tool, HTTP routes, and instructions) with
 In containers, mount a volume over the SQLite file (or use Postgres) or feedback
 is lost when the pod restarts.
 
+## Trusted user identity
+
+When dropmcp is deployed behind an authentication proxy, set the trusted caller
+identity header with `DROPMCP_USER_HEADER` or the `user_header` kwarg. The default
+header is `X-User-Email`.
+
+The catalog HTTP API exposes that identity at `GET /api/me`:
+
+```json
+{
+  "email": "user@example.com",
+  "authenticated": true
+}
+```
+
+The catalog footer shows the signed-in identity when the header is present and
+stays unchanged for anonymous requests.
+
 ## Per-user subscriptions
 
 When `DROPMCP_USER_SUBSCRIPTIONS=true`, users can opt in to individual skills

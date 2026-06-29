@@ -2,7 +2,8 @@ import { useCatalog } from '../context/CatalogContext';
 import styles from './Footer.module.css';
 
 export default function Footer() {
-  const { server } = useCatalog();
+  const { me, server } = useCatalog();
+  const signedInEmail = me.authenticated ? me.email : null;
 
   return (
     <footer className={styles.footer}>
@@ -17,6 +18,11 @@ export default function Footer() {
             Powered by FastMCP
           </a>
         </div>
+        {signedInEmail && (
+          <span className={styles.identity}>
+            Signed in as <strong>{signedInEmail}</strong>
+          </span>
+        )}
         <span>{server.name}</span>
       </div>
     </footer>

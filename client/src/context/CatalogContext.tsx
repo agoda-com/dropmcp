@@ -10,6 +10,7 @@ import {
   fetchCatalog,
   type CatalogItem,
   type CatalogServer,
+  type CurrentUserIdentity,
 } from '../api/catalog';
 
 interface CatalogState {
@@ -19,6 +20,7 @@ interface CatalogState {
   error: string | null;
   subscriptionsEnabled: boolean;
   user: string | null;
+  me: CurrentUserIdentity;
   subscriptionControlsEnabled: boolean;
   subscribedGroups: string[];
   updateItemSubscription: (
@@ -39,6 +41,11 @@ const defaultServer: CatalogServer = {
   icon_url: null,
 };
 
+const anonymousUser: CurrentUserIdentity = {
+  email: null,
+  authenticated: false,
+};
+
 const CatalogContext = createContext<CatalogState>({
   items: [],
   server: defaultServer,
@@ -46,6 +53,7 @@ const CatalogContext = createContext<CatalogState>({
   error: null,
   subscriptionsEnabled: false,
   user: null,
+  me: anonymousUser,
   subscriptionControlsEnabled: false,
   subscribedGroups: [],
   updateItemSubscription: () => {},
@@ -59,6 +67,7 @@ export function CatalogProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState<string | null>(null);
   const [subscriptionsEnabled, setSubscriptionsEnabled] = useState(false);
   const [user, setUser] = useState<string | null>(null);
+  const [me, setMe] = useState<CurrentUserIdentity>(anonymousUser);
   const [subscribedGroups, setSubscribedGroups] = useState<string[]>([]);
 
   useEffect(() => {
@@ -68,6 +77,7 @@ export function CatalogProvider({ children }: { children: ReactNode }) {
         setServer(data.server);
         setSubscriptionsEnabled(data.subscriptionsEnabled);
         setUser(data.user);
+        setMe(data.me);
         setSubscribedGroups(data.subscribedGroups);
         if (data.server.name) {
           document.title = data.server.name;
@@ -132,6 +142,7 @@ export function CatalogProvider({ children }: { children: ReactNode }) {
         error,
         subscriptionsEnabled,
         user,
+        me,
         subscriptionControlsEnabled,
         subscribedGroups,
         updateItemSubscription,

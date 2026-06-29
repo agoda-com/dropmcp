@@ -60,6 +60,23 @@ def _catalog_server_payload(settings: Settings) -> dict:
     }
 
 
+def _identity_payload(user: str | None) -> dict:
+    return {
+        "email": user,
+        "authenticated": user is not None,
+    }
+
+
+def _request_user(
+    request: Request,
+    settings: Settings,
+    coordinator: SubscriptionCoordinator | None,
+) -> str | None:
+    if settings.user_subscriptions_enabled and coordinator is not None:
+        return coordinator.http_user(request)
+    return user_from_request(request, settings.user_header)
+
+
 def _entry_to_dict(
     entry,
     catalog: CatalogProvider,
@@ -276,10 +293,8 @@ def _register_catalog_routes(
 
     @mcp.custom_route("/catalog", methods=["GET"])
     async def catalog_index(request: Request) -> JSONResponse:
-        user = None
+        user = _request_user(request, settings, subscription_coordinator)
         subscribed_groups: list[str] = []
-        if settings.user_subscriptions_enabled and subscription_coordinator is not None:
-            user = subscription_coordinator.http_user(request)
 
         available_groups = sorted(
             {e.group for e in catalog.get_entries() if e.group}
@@ -302,10 +317,16 @@ def _register_catalog_routes(
             "server": _catalog_server_payload(settings),
             "subscriptions_enabled": settings.user_subscriptions_enabled,
             "user": user,
+            "me": _identity_payload(user),
             "subscribed_groups": subscribed_groups,
             "available_groups": available_groups,
         }
         return JSONResponse(payload)
+
+    @mcp.custom_route("/api/me", methods=["GET"])
+    async def current_user(request: Request) -> JSONResponse:
+        user = _request_user(request, settings, subscription_coordinator)
+        return JSONResponse(_identity_payload(user))
 
     @mcp.custom_route("/catalog/{item_type}/{name}", methods=["GET"])
     async def catalog_detail(request: Request) -> JSONResponse:
@@ -314,11 +335,7 @@ def _register_catalog_routes(
         )
         if entry is None:
             return JSONResponse({"error": "not found"}, status_code=404)
-        user = None
-        if settings.user_subscriptions_enabled and subscription_coordinator is not None:
-            user = subscription_coordinator.http_user(request)
-        elif settings.user_subscriptions_enabled:
-            user = user_from_request(request, settings.user_header)
+        user = _request_user(request, settings, subscription_coordinator)
         subscribed = None
         if (
             user is not None
