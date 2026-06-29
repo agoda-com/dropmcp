@@ -5,8 +5,10 @@ from __future__ import annotations
 import importlib
 import logging
 import os
+from types import SimpleNamespace
 
 import pytest
+from starlette.datastructures import Headers
 
 from dropmcp.middleware import TelemetryMiddleware
 from dropmcp.telemetry import METRIC_NAMES
@@ -40,6 +42,15 @@ class _RecordingMeter:
         inst = _RecordingInstrument("histogram", name, unit)
         self.instruments.append(inst)
         return inst
+
+
+def _request(headers: dict[str, str]):
+    return SimpleNamespace(
+        headers=Headers(headers),
+        client=None,
+        method="POST",
+        url=SimpleNamespace(path="/mcp"),
+    )
 
 
 def test_configure_noop_without_endpoint(monkeypatch):
@@ -80,6 +91,29 @@ def test_log_event_uses_console_when_otel_inactive(monkeypatch, caplog):
         event_records = [r for r in caplog.records if r.name == "dropmcp.events"]
         assert len(event_records) == 1
         assert event_records[0].mcp_event["name"] == "demo"
+
+
+def test_request_context_logs_originator_header(monkeypatch):
+    with fresh_telemetry(monkeypatch) as telemetry:
+        monkeypatch.setattr(
+            "fastmcp.server.dependencies.get_http_request",
+            lambda: _request({"originator": "codex_cli_rs"}),
+        )
+
+        ctx = telemetry.request_context()
+
+        assert ctx["http_originator"] == "codex_cli_rs"
+        assert telemetry.client_bucket() == "codex_cli_rs"
+
+
+def test_client_bucket_detects_codex_user_agent(monkeypatch):
+    with fresh_telemetry(monkeypatch) as telemetry:
+        monkeypatch.setattr(
+            "fastmcp.server.dependencies.get_http_request",
+            lambda: _request({"user-agent": "OpenAI Codex CLI/0.142.3"}),
+        )
+
+        assert telemetry.client_bucket() == "codex"
 
 
 def test_configure_sets_service_name(monkeypatch):
