@@ -233,6 +233,22 @@ names use dotted OTel style (for example `skill.invocations`,
 service name defaults to `DROPMCP_NAME`; override with `OTEL_SERVICE_NAME` if
 needed.
 
+Telemetry preserves richer self-reported MCP metadata in structured logs,
+including `initialize.params.clientInfo`, protocol version, capability summary,
+selected request `_meta` keys (`agent`, `ide`, `team`, `repo`, `environment`,
+`launcher`, `launcher_version`, `trace_id`), session/transport details, HTTP
+fallback headers, operation names, and sanitized error context. These values are
+for observability only and are not security signals.
+
+Metric attributes are deliberately bounded: `client`, `client_version`,
+`client_source`, `transport`, `team`, `environment`, `operation_kind`,
+`outcome`, and `error.type`, plus the relevant local operation name such as
+`skill`, `prompt`, or `resource`. Unknown values roll up to `other`, missing
+values roll up to `unknown`, and request `_meta` values are allowlisted,
+truncated, and scrubbed before logging or metric attribution. Set
+`DROPMCP_TELEMETRY_TEAM_BUCKETS=supply,platform,...` to control which declared
+team names are allowed as metric buckets.
+
 When `OTEL_EXPORTER_OTLP_ENDPOINT` is unset, OpenTelemetry export is a no-op —
 no extra imports, no export overhead — but structured per-invocation logs still
 go to the console.

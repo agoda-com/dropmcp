@@ -10,72 +10,42 @@ latest skill catalog).
 from __future__ import annotations
 
 import time
-from typing import Any
 
 from fastmcp.server.middleware import Middleware, MiddlewareContext
 
 from dropmcp.telemetry import (
-    client_bucket,
     record_mcp_initialization,
     record_tool_listing,
 )
-
-
-def _client_info(context: MiddlewareContext) -> dict[str, Any]:
-    """Best-effort extract of ``clientInfo`` from an InitializeRequest."""
-    info: dict[str, Any] = {}
-    try:
-        params = getattr(context.message, "params", None)
-        client_info = None
-        if params is not None:
-            client_info = getattr(params, "clientInfo", None)
-            if client_info is None and isinstance(params, dict):
-                client_info = params.get("clientInfo")
-        if client_info is None:
-            return info
-
-        name = getattr(client_info, "name", None)
-        version = getattr(client_info, "version", None)
-        if name is None and isinstance(client_info, dict):
-            name = client_info.get("name")
-            version = client_info.get("version")
-        if name:
-            info["client_name"] = name
-        if version:
-            info["client_version"] = version
-    except Exception:
-        return info
-    return info
 
 
 class TelemetryMiddleware(Middleware):
     """Records counters and structured logs for MCP protocol events."""
 
     async def on_initialize(self, context: MiddlewareContext, call_next):
-        info = _client_info(context)
-        client = info.get("client_name", client_bucket())
-
         start = time.perf_counter()
         outcome = "success"
+        error: BaseException | None = None
         try:
             return await call_next(context)
-        except Exception:
+        except Exception as exc:
             outcome = "error"
+            error = exc
             raise
         finally:
             duration_ms = (time.perf_counter() - start) * 1000
             record_mcp_initialization(
                 outcome=outcome,
                 duration_ms=duration_ms,
-                client=client,
-                **info,
+                context=context,
+                error=error,
             )
 
     async def on_list_tools(self, context: MiddlewareContext, call_next):
         start = time.perf_counter()
         outcome = "success"
         tool_count: int | None = None
-        client = client_bucket()
+        error: BaseException | None = None
         try:
             tools = await call_next(context)
             try:
@@ -83,14 +53,16 @@ class TelemetryMiddleware(Middleware):
             except TypeError:
                 tool_count = None
             return tools
-        except Exception:
+        except Exception as exc:
             outcome = "error"
+            error = exc
             raise
         finally:
             duration_ms = (time.perf_counter() - start) * 1000
             record_tool_listing(
                 outcome=outcome,
                 duration_ms=duration_ms,
-                client=client,
                 tool_count=tool_count,
+                context=context,
+                error=error,
             )
