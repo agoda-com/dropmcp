@@ -39,6 +39,25 @@ _LOGGED_HEADERS = (
 
 _UA_PRODUCT_RE = re.compile(r"^([A-Za-z0-9._-]+)")
 
+_MCP_CLIENT_BUCKETS = {
+    "codex-mcp-client": "codex",
+    "cursor": "cursor",
+    "cursor-vscode": "cursor",
+    "claude-code": "claude-code",
+}
+
+_GENERIC_HTTP_CLIENT_BUCKETS = {
+    "aiohttp",
+    "curl",
+    "go-http-client",
+    "httpx",
+    "okhttp",
+    "python-httpx",
+    "python-requests",
+}
+
+_SESSION_CLIENT_BUCKET_ATTR = "_dropmcp_client_bucket"
+
 _event_logger = logging.getLogger("dropmcp.events")
 
 _event_logging_configured = False
@@ -314,21 +333,99 @@ def request_context() -> dict[str, Any]:
     return ctx
 
 
-def client_bucket() -> str:
-    """Low-cardinality client identifier for the active HTTP request."""
-    ctx = request_context()
-    originator = ctx.get("http_originator")
-    if originator:
-        match = _UA_PRODUCT_RE.match(originator)
-        return match.group(1).lower() if match else "other"
+def normalize_mcp_client_name(name: str | None) -> str | None:
+    """Normalize MCP ``clientInfo.name`` into telemetry client buckets."""
+    if not name:
+        return None
+    normalized = str(name).strip().lower()
+    if not normalized:
+        return None
+    if bucket := _MCP_CLIENT_BUCKETS.get(normalized):
+        return bucket
+    if "codex" in normalized:
+        return "codex"
+    match = _UA_PRODUCT_RE.match(normalized)
+    return match.group(1).lower() if match else "other"
 
+
+def remember_mcp_client_bucket(context: Any, bucket: str | None) -> None:
+    """Attach a normalized client bucket to the active FastMCP session."""
+    if not bucket:
+        return
+    session = _mcp_session(context)
+    if session is not None:
+        setattr(session, _SESSION_CLIENT_BUCKET_ATTR, bucket)
+
+
+def _mcp_session(context: Any | None = None) -> Any | None:
+    if context is None:
+        try:
+            from fastmcp.server.context import _current_context
+
+            context = _current_context.get()
+        except Exception:
+            return None
+    if context is None:
+        return None
+
+    try:
+        request_ctx = getattr(context, "request_context", None)
+        if request_ctx is not None and getattr(request_ctx, "session", None) is not None:
+            return request_ctx.session
+    except Exception:
+        pass
+
+    try:
+        return context.session
+    except Exception:
+        return None
+
+
+def _mcp_session_client_bucket(context: Any | None = None) -> str | None:
+    session = _mcp_session(context)
+    if session is None:
+        return None
+    bucket = getattr(session, _SESSION_CLIENT_BUCKET_ATTR, None)
+    return bucket if isinstance(bucket, str) and bucket else None
+
+
+def _originator_bucket(ctx: dict[str, Any]) -> str | None:
+    originator = ctx.get("http_originator")
+    if not originator:
+        return None
+    match = _UA_PRODUCT_RE.match(originator)
+    return match.group(1).lower() if match else "other"
+
+
+def _user_agent_bucket(ctx: dict[str, Any]) -> str | None:
     ua = ctx.get("http_user_agent")
     if not ua:
-        return "unknown"
+        return None
     if "codex" in ua.lower():
         return "codex"
     match = _UA_PRODUCT_RE.match(ua)
     return match.group(1).lower() if match else "other"
+
+
+def client_bucket(context: Any | None = None) -> str:
+    """Low-cardinality client identifier for the active MCP/HTTP request."""
+    ctx = request_context()
+
+    if originator := _originator_bucket(ctx):
+        return originator
+
+    session_bucket = _mcp_session_client_bucket(context)
+    ua_bucket = _user_agent_bucket(ctx)
+
+    if ua_bucket and (
+        session_bucket is None or ua_bucket not in _GENERIC_HTTP_CLIENT_BUCKETS
+    ):
+        return ua_bucket
+    if session_bucket:
+        return session_bucket
+    if ua_bucket:
+        return ua_bucket
+    return "unknown"
 
 
 def log_event(

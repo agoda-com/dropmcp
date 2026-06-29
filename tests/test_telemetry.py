@@ -116,6 +116,119 @@ def test_client_bucket_detects_codex_user_agent(monkeypatch):
         assert telemetry.client_bucket() == "codex"
 
 
+@pytest.mark.parametrize(
+    ("client_name", "bucket"),
+    [
+        ("codex-mcp-client", "codex"),
+        ("cursor-vscode", "cursor"),
+        ("Cursor", "cursor"),
+        ("claude-code", "claude-code"),
+    ],
+)
+def test_normalize_mcp_client_name(client_name, bucket, monkeypatch):
+    with fresh_telemetry(monkeypatch) as telemetry:
+        assert telemetry.normalize_mcp_client_name(client_name) == bucket
+
+
+def test_client_bucket_uses_session_client_info_without_user_agent(monkeypatch):
+    with fresh_telemetry(monkeypatch) as telemetry:
+        session = SimpleNamespace()
+        mcp_context = SimpleNamespace(session=session, request_context=None)
+        telemetry.remember_mcp_client_bucket(mcp_context, "codex")
+        monkeypatch.setattr(
+            "fastmcp.server.dependencies.get_http_request",
+            lambda: _request({}),
+        )
+
+        assert telemetry.client_bucket(mcp_context) == "codex"
+
+
+def test_client_bucket_prefers_session_client_info_over_generic_user_agent(
+    monkeypatch,
+):
+    with fresh_telemetry(monkeypatch) as telemetry:
+        session = SimpleNamespace()
+        mcp_context = SimpleNamespace(session=session, request_context=None)
+        telemetry.remember_mcp_client_bucket(mcp_context, "codex")
+        monkeypatch.setattr(
+            "fastmcp.server.dependencies.get_http_request",
+            lambda: _request({"user-agent": "python-httpx/0.28.1"}),
+        )
+
+        assert telemetry.client_bucket(mcp_context) == "codex"
+
+
+@pytest.mark.asyncio
+async def test_initialize_records_normalized_mcp_client_and_remembers_session(
+    monkeypatch,
+):
+    with fresh_telemetry(monkeypatch) as telemetry:
+        recorder = _RecordingMeter()
+        instruments = telemetry._create_instruments(recorder)
+        telemetry._state["instruments"] = instruments
+        telemetry._state["active"] = True
+
+        session = SimpleNamespace()
+        mcp_context = SimpleNamespace(session=session, request_context=None)
+        context = SimpleNamespace(
+            message=SimpleNamespace(
+                params={
+                    "clientInfo": {
+                        "name": "codex-mcp-client",
+                        "version": "0.142.3",
+                    },
+                },
+            ),
+            fastmcp_context=mcp_context,
+        )
+        monkeypatch.setattr(
+            "fastmcp.server.dependencies.get_http_request",
+            lambda: _request({}),
+        )
+
+        async def call_next(_context):
+            return None
+
+        await TelemetryMiddleware().on_initialize(context, call_next)
+
+        assert telemetry.client_bucket(mcp_context) == "codex"
+        assert ("add", 1.0, {
+            "client": "codex",
+            "outcome": "success",
+        }) in instruments.mcp_initializations.records
+
+
+def test_track_uses_session_client_bucket(monkeypatch):
+    from fastmcp.server.context import _current_context
+
+    with fresh_telemetry(monkeypatch) as telemetry:
+        recorder = _RecordingMeter()
+        instruments = telemetry._create_instruments(recorder)
+        telemetry._state["instruments"] = instruments
+        telemetry._state["active"] = True
+
+        session = SimpleNamespace()
+        mcp_context = SimpleNamespace(session=session, request_context=None)
+        telemetry.remember_mcp_client_bucket(mcp_context, "codex")
+        monkeypatch.setattr(
+            "fastmcp.server.dependencies.get_http_request",
+            lambda: _request({}),
+        )
+
+        token = _current_context.set(mcp_context)
+        try:
+            with telemetry.track("skill", "demo-skill"):
+                pass
+        finally:
+            _current_context.reset(token)
+
+        assert ("add", 1.0, {
+            "skill": "demo-skill",
+            "client": "codex",
+            "outcome": "success",
+        }) in instruments.skill_invocations.records
+
+
 def test_configure_sets_service_name(monkeypatch):
     with fresh_telemetry(monkeypatch) as telemetry:
         monkeypatch.setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://localhost:4318")

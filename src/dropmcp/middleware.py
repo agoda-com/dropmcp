@@ -16,8 +16,10 @@ from fastmcp.server.middleware import Middleware, MiddlewareContext
 
 from dropmcp.telemetry import (
     client_bucket,
+    normalize_mcp_client_name,
     record_mcp_initialization,
     record_tool_listing,
+    remember_mcp_client_bucket,
 )
 
 
@@ -53,7 +55,9 @@ class TelemetryMiddleware(Middleware):
 
     async def on_initialize(self, context: MiddlewareContext, call_next):
         info = _client_info(context)
-        client = info.get("client_name", client_bucket())
+        client_from_info = normalize_mcp_client_name(info.get("client_name"))
+        remember_mcp_client_bucket(context.fastmcp_context, client_from_info)
+        client = client_bucket(context.fastmcp_context)
 
         start = time.perf_counter()
         outcome = "success"
@@ -75,7 +79,7 @@ class TelemetryMiddleware(Middleware):
         start = time.perf_counter()
         outcome = "success"
         tool_count: int | None = None
-        client = client_bucket()
+        client = client_bucket(context.fastmcp_context)
         try:
             tools = await call_next(context)
             try:

@@ -343,6 +343,74 @@ async def test_stateless_http_prompt_tools_are_header_scoped(tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_http_prompt_tools_use_codex_client_info_without_user_agent(
+    tmp_path,
+    caplog,
+):
+    import httpx
+    from fastmcp import Client
+    from fastmcp.client.transports import StreamableHttpTransport
+    from mcp.types import Implementation
+
+    from dropmcp.config import Settings
+    from dropmcp.server import build_server
+
+    skills = tmp_path / "skills"
+    prompts = tmp_path / "prompts"
+    skills.mkdir()
+    prompts.mkdir()
+    _write_prompt(
+        prompts,
+        "greet",
+        "name: greet\ndescription: Greets\narguments:\n"
+        "  - name: who\n    description: Who\n    required: true\n",
+        "Hello {{who}}!",
+    )
+    settings = Settings.resolve(
+        skills=skills,
+        prompts=prompts,
+        ui_enabled=False,
+        feedback_enabled=False,
+    )
+    app = build_server(settings).http_app()
+
+    def client_factory(headers=None, auth=None, follow_redirects=True, timeout=None):
+        merged_headers = dict(headers or {})
+        merged_headers["user-agent"] = ""
+        kwargs = {
+            "transport": httpx.ASGITransport(app=app),
+            "base_url": "http://testserver",
+            "headers": merged_headers,
+            "follow_redirects": follow_redirects,
+        }
+        if auth is not None:
+            kwargs["auth"] = auth
+        if timeout is not None:
+            kwargs["timeout"] = timeout
+        return httpx.AsyncClient(**kwargs)
+
+    transport = StreamableHttpTransport(
+        "http://testserver/mcp",
+        httpx_client_factory=client_factory,
+    )
+
+    async with app.router.lifespan_context(app):
+        async with Client(
+            transport,
+            client_info=Implementation(name="codex-mcp-client", version="0.142.3"),
+        ) as client:
+            with caplog.at_level(logging.INFO, logger="dropmcp.prompts"):
+                tools = await client.list_tools()
+            prompts_list = await client.list_prompts()
+            result = await client.call_tool_mcp("greet", {"who": "Codex"})
+
+    assert [tool.name for tool in tools] == ["greet"]
+    assert [prompt.name for prompt in prompts_list] == ["greet"]
+    assert result.content[0].text == "Hello Codex!"
+    assert "prompts_as_tools decision exposed=True client=codex" in caplog.text
+
+
+@pytest.mark.asyncio
 async def test_list_prompts_empty_dir(tmp_path):
     provider = PromptsDirectoryProvider(roots=tmp_path)
     prompts = await provider._list_prompts()
