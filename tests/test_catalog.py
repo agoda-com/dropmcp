@@ -445,3 +445,42 @@ async def test_catalog_detail_includes_content_and_resource_route(tmp_path):
         assert spaced_resource.status_code == 200
         assert spaced_resource.text == "x = 1\n"
 
+
+@pytest.mark.asyncio
+async def test_identity_route_uses_configured_header(tmp_path):
+    from starlette.testclient import TestClient
+
+    from dropmcp.config import Settings
+    from dropmcp.server import build_server
+
+    _, skills, prompts = _make_provider(tmp_path)
+    settings = Settings.resolve(
+        skills=skills,
+        prompts=prompts,
+        ui_enabled=True,
+        feedback_enabled=False,
+        user_header="X-Forwarded-User",
+    )
+    mcp = build_server(settings)
+
+    with TestClient(mcp.http_app()) as client:
+        anonymous = client.get("/api/me")
+        assert anonymous.status_code == 200
+        assert anonymous.json() == {"email": None, "authenticated": False}
+
+        headers = {"X-Forwarded-User": "dev@example.com"}
+        authenticated = client.get("/api/me", headers=headers)
+        assert authenticated.status_code == 200
+        assert authenticated.json() == {
+            "email": "dev@example.com",
+            "authenticated": True,
+        }
+
+        catalog = client.get("/catalog", headers=headers)
+        assert catalog.status_code == 200
+        body = catalog.json()
+        assert body["user"] == "dev@example.com"
+        assert body["me"] == {
+            "email": "dev@example.com",
+            "authenticated": True,
+        }
