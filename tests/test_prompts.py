@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 import pytest
@@ -10,6 +11,7 @@ from dropmcp.prompts import (
     PromptsDirectoryProvider,
     _parse_prompt_file,
     _build_prompt,
+    _build_prompt_tool,
     _collect_assets,
     MAIN_FILE,
 )
@@ -110,6 +112,55 @@ def test_build_prompt_no_args():
     assert prompt.fn() == "Hello, world!"
 
 
+def test_build_prompt_tool_maps_arguments_to_input_schema():
+    meta = {
+        "name": "greet",
+        "description": "Greets",
+        "arguments": [
+            {"name": "who", "description": "Target", "required": True},
+            {"name": "tone", "description": "Tone", "required": False},
+        ],
+    }
+    tool = _build_prompt_tool(_build_prompt(meta, "Hello {{who}}"))
+
+    assert tool.name == "greet"
+    assert tool.description == "Greets"
+    assert tool.parameters == {
+        "type": "object",
+        "properties": {
+            "who": {"type": "string", "description": "Target"},
+            "tone": {"type": "string", "description": "Tone"},
+        },
+        "additionalProperties": False,
+        "required": ["who"],
+    }
+
+
+@pytest.mark.asyncio
+async def test_prompt_tool_run_returns_rendered_prompt_messages():
+    meta = {
+        "name": "greet",
+        "description": "Greets",
+        "arguments": [
+            {"name": "who", "description": "Target", "required": True},
+        ],
+    }
+    tool = _build_prompt_tool(_build_prompt(meta, "Hello {{who}}!"))
+
+    result = await tool.run({"who": "Codex"})
+
+    assert result.content[0].text == "Hello Codex!"
+    assert result.structured_content == {
+        "description": "Greets",
+        "messages": [
+            {
+                "role": "user",
+                "content": {"type": "text", "text": "Hello Codex!"},
+            }
+        ],
+    }
+
+
 # ---------------------------------------------------------------------------
 # _collect_assets
 # ---------------------------------------------------------------------------
@@ -159,6 +210,136 @@ async def test_list_prompts_discovers_prompts(tmp_path):
     names = {p.name for p in prompts}
     assert "greet" in names
     assert "farewell" in names
+
+
+@pytest.mark.asyncio
+async def test_list_tools_exposes_prompts_for_codex_originator(
+    tmp_path,
+    monkeypatch,
+    caplog,
+):
+    _write_prompt(
+        tmp_path,
+        "greet",
+        "name: greet\ndescription: Greets\narguments:\n"
+        "  - name: who\n    description: Who\n    required: true\n",
+        "Hello {{who}}!",
+    )
+    monkeypatch.setattr(
+        "dropmcp.prompts.client_bucket",
+        lambda: "codex_cli_rs",
+    )
+
+    provider = PromptsDirectoryProvider(roots=tmp_path)
+    with caplog.at_level(logging.INFO, logger="dropmcp.prompts"):
+        tools = await provider._list_tools()
+
+    assert [tool.name for tool in tools] == ["greet"]
+    assert tools[0].parameters["required"] == ["who"]
+    assert "prompts_as_tools decision exposed=True client=codex_cli_rs" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_list_tools_exposes_prompts_for_codex_user_agent(
+    tmp_path,
+    monkeypatch,
+):
+    _write_prompt(tmp_path, "greet", "name: greet\ndescription: Greets\n")
+    monkeypatch.setattr(
+        "dropmcp.prompts.client_bucket",
+        lambda: "codex",
+    )
+
+    provider = PromptsDirectoryProvider(roots=tmp_path)
+    tools = await provider._list_tools()
+
+    assert [tool.name for tool in tools] == ["greet"]
+
+
+@pytest.mark.asyncio
+async def test_list_tools_hides_prompts_for_prompt_capable_clients(
+    tmp_path,
+    monkeypatch,
+):
+    _write_prompt(tmp_path, "greet", "name: greet\ndescription: Greets\n")
+    monkeypatch.setattr(
+        "dropmcp.prompts.client_bucket",
+        lambda: "claude-code",
+    )
+
+    provider = PromptsDirectoryProvider(roots=tmp_path)
+
+    assert await provider._list_tools() == []
+    assert [prompt.name for prompt in await provider._list_prompts()] == ["greet"]
+
+
+@pytest.mark.asyncio
+async def test_stateless_http_prompt_tools_are_header_scoped(tmp_path):
+    import httpx
+    from fastmcp import Client
+    from fastmcp.client.transports import StreamableHttpTransport
+
+    from dropmcp.config import Settings
+    from dropmcp.server import build_server
+
+    skills = tmp_path / "skills"
+    prompts = tmp_path / "prompts"
+    skills.mkdir()
+    prompts.mkdir()
+    _write_prompt(
+        prompts,
+        "greet",
+        "name: greet\ndescription: Greets\narguments:\n"
+        "  - name: who\n    description: Who\n    required: true\n",
+        "Hello {{who}}!",
+    )
+    settings = Settings.resolve(
+        skills=skills,
+        prompts=prompts,
+        ui_enabled=False,
+        feedback_enabled=False,
+    )
+    app = build_server(settings).http_app(stateless_http=True)
+
+    def client_factory(headers=None, auth=None, follow_redirects=True, timeout=None):
+        kwargs = {
+            "transport": httpx.ASGITransport(app=app),
+            "base_url": "http://testserver",
+            "headers": headers,
+            "follow_redirects": follow_redirects,
+        }
+        if auth is not None:
+            kwargs["auth"] = auth
+        if timeout is not None:
+            kwargs["timeout"] = timeout
+        return httpx.AsyncClient(**kwargs)
+
+    codex_transport = StreamableHttpTransport(
+        "http://testserver/mcp",
+        headers={"originator": "codex_cli_rs"},
+        httpx_client_factory=client_factory,
+    )
+    regular_transport = StreamableHttpTransport(
+        "http://testserver/mcp",
+        httpx_client_factory=client_factory,
+    )
+
+    async with app.router.lifespan_context(app):
+        async with Client(codex_transport) as client:
+            tools = await client.list_tools()
+            prompts_list = await client.list_prompts()
+            result = await client.call_tool_mcp("greet", {"who": "Codex"})
+
+        assert [tool.name for tool in tools] == ["greet"]
+        assert [prompt.name for prompt in prompts_list] == ["greet"]
+        assert result.content[0].text == "Hello Codex!"
+
+        async with Client(regular_transport) as client:
+            tools = await client.list_tools()
+            prompts_list = await client.list_prompts()
+
+    assert [tool.name for tool in tools] == []
+    assert [prompt.name for prompt in prompts_list] == ["greet"]
 
 
 @pytest.mark.asyncio

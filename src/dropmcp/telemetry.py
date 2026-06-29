@@ -28,6 +28,7 @@ logger = logging.getLogger(__name__)
 _FLUSH_TIMEOUT_MS = 5000
 
 _LOGGED_HEADERS = (
+    "originator",
     "user-agent",
     "x-forwarded-for",
     "x-real-ip",
@@ -316,9 +317,16 @@ def request_context() -> dict[str, Any]:
 def client_bucket() -> str:
     """Low-cardinality client identifier for the active HTTP request."""
     ctx = request_context()
+    originator = ctx.get("http_originator")
+    if originator:
+        match = _UA_PRODUCT_RE.match(originator)
+        return match.group(1).lower() if match else "other"
+
     ua = ctx.get("http_user_agent")
     if not ua:
         return "unknown"
+    if "codex" in ua.lower():
+        return "codex"
     match = _UA_PRODUCT_RE.match(ua)
     return match.group(1).lower() if match else "other"
 

@@ -22,9 +22,11 @@ import yaml
 from fastmcp.prompts import Prompt
 from fastmcp.resources import Resource
 from fastmcp.server.providers import Provider
+from fastmcp.tools.base import Tool, ToolResult
+from mcp.types import TextContent
 
 from dropmcp.subscriptions import item_visible_over_mcp, resolve_mcp_user
-from dropmcp.telemetry import track
+from dropmcp.telemetry import client_bucket, track
 
 if TYPE_CHECKING:
     from dropmcp.config import Settings
@@ -35,6 +37,7 @@ log = logging.getLogger(__name__)
 MAIN_FILE = "PROMPT.md"
 ASSETS_DIR = "assets"
 FRONTMATTER_RE = re.compile(r"^---\s*\n(.*?)\n---\s*\n", re.DOTALL)
+PROMPT_BLIND_CLIENTS = ("codex_cli_rs", "codex_vscode", "codex")
 
 
 def _parse_prompt_file(path: Path) -> tuple[dict[str, Any], str]:
@@ -79,7 +82,95 @@ def _build_prompt(meta: dict[str, Any], template: str) -> Prompt:
     render.__annotations__ = {**annotations, "return": str}
     render.__doc__ = description
 
-    return Prompt.from_function(render, name=name, description=description)
+    prompt = Prompt.from_function(render, name=name, description=description)
+    arg_descriptions = {
+        str(arg["name"]): arg.get("description")
+        for arg in arg_defs
+        if arg.get("description")
+    }
+    if prompt.arguments:
+        prompt.arguments = [
+            arg.model_copy(
+                update={"description": arg_descriptions.get(arg.name, arg.description)}
+            )
+            for arg in prompt.arguments
+        ]
+    return prompt
+
+
+def _prompt_tool_parameters(prompt: Prompt) -> dict[str, Any]:
+    properties: dict[str, dict[str, str]] = {}
+    required: list[str] = []
+    for arg in prompt.arguments or []:
+        schema = {"type": "string"}
+        if arg.description:
+            schema["description"] = arg.description
+        properties[arg.name] = schema
+        if arg.required:
+            required.append(arg.name)
+
+    parameters: dict[str, Any] = {
+        "type": "object",
+        "properties": properties,
+        "additionalProperties": False,
+    }
+    if required:
+        parameters["required"] = required
+    return parameters
+
+
+def _message_content_text(content: Any) -> str:
+    if isinstance(content, TextContent):
+        return content.text
+    if hasattr(content, "model_dump_json"):
+        return content.model_dump_json(by_alias=True, exclude_none=True)
+    return str(content)
+
+
+def _prompt_result_text(prompt) -> str:
+    messages = prompt.messages
+    if (
+        len(messages) == 1
+        and messages[0].role == "user"
+        and isinstance(messages[0].content, TextContent)
+    ):
+        return messages[0].content.text
+
+    rendered: list[str] = []
+    for message in messages:
+        rendered.append(f"{message.role}:\n{_message_content_text(message.content)}")
+    return "\n\n".join(rendered)
+
+
+class PromptTool(Tool):
+    """Tool wrapper that returns a rendered MCP prompt for prompt-blind clients."""
+
+    prompt: Prompt
+
+    async def run(self, arguments: dict[str, Any]) -> ToolResult:
+        with track("prompt_tool", self.prompt.name):
+            raw = await self.prompt.render(arguments)
+            rendered = self.prompt.convert_result(raw)
+            structured = rendered.to_mcp_prompt_result().model_dump(
+                mode="json",
+                by_alias=True,
+                exclude_none=True,
+            )
+            return ToolResult(
+                content=[
+                    TextContent(type="text", text=_prompt_result_text(rendered))
+                ],
+                structured_content=structured,
+            )
+
+
+def _build_prompt_tool(prompt: Prompt) -> PromptTool:
+    return PromptTool(
+        name=prompt.name,
+        description=prompt.description,
+        parameters=_prompt_tool_parameters(prompt),
+        prompt=prompt,
+    )
 
 
 def _collect_assets(prompt_name: str, assets_dir: Path) -> list[Resource]:
@@ -137,6 +228,16 @@ class PromptsDirectoryProvider(Provider):
         self._subscription_settings = subscription_settings
         self._subscription_coordinator = subscription_coordinator
 
+    def _should_expose_prompt_tools(self) -> bool:
+        client = client_bucket()
+        exposed = client in PROMPT_BLIND_CLIENTS
+        log.info(
+            "prompts_as_tools decision exposed=%s client=%s",
+            exposed,
+            client,
+        )
+        return exposed
+
     def _mcp_user(self) -> str | None:
         if self._subscription_coordinator is not None:
             return self._subscription_coordinator.mcp_user()
@@ -192,6 +293,19 @@ class PromptsDirectoryProvider(Provider):
         self._ensure_discovered()
         prompts = self._prompts or []
         return [p for p in prompts if self._prompt_visible(p.name)]
+
+    async def _list_tools(self) -> Sequence[Tool]:
+        if not self._should_expose_prompt_tools():
+            return []
+        return [_build_prompt_tool(prompt) for prompt in await self._list_prompts()]
+
+    async def _get_tool(self, name: str, version=None) -> Tool | None:
+        if not self._should_expose_prompt_tools():
+            return None
+        prompt = await super()._get_prompt(name, version)
+        if prompt is None:
+            return None
+        return _build_prompt_tool(prompt)
 
     async def _list_resources(self) -> Sequence[Resource]:
         self._ensure_discovered()
