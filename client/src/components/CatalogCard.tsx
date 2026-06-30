@@ -1,4 +1,4 @@
-import { useCallback, useState, type MouseEvent } from 'react';
+import { useCallback, useState, type ChangeEvent } from 'react';
 import { Link } from 'react-router-dom';
 import type { CatalogItem } from '../api/catalog';
 import { subscribeItem, unsubscribeItem } from '../api/subscriptions';
@@ -15,11 +15,10 @@ export default function CatalogCard({ item }: { item: CatalogItem }) {
   } = useCatalog();
 
   const handleSubscriptionToggle = async (
-    event: MouseEvent<HTMLInputElement>,
+    event: ChangeEvent<HTMLInputElement>,
   ) => {
-    event.preventDefault();
     event.stopPropagation();
-    const next = !item.subscribed;
+    const next = event.currentTarget.checked;
     updateItemSubscription(type, item.name, next);
     try {
       if (next) {
@@ -47,8 +46,7 @@ export default function CatalogCard({ item }: { item: CatalogItem }) {
             type="checkbox"
             checked={Boolean(item.subscribed)}
             aria-label={`Subscribe to ${item.name}`}
-            onChange={() => {}}
-            onClick={handleSubscriptionToggle}
+            onChange={handleSubscriptionToggle}
           />
         </label>
       )}

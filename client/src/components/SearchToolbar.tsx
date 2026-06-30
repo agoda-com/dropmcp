@@ -33,6 +33,7 @@ export default function SearchToolbar({
   allItems,
 }: Props) {
   const {
+    subscriptionsEnabled,
     subscriptionControlsEnabled,
     subscribedGroups,
     updateGroupSubscriptions,
@@ -59,6 +60,8 @@ export default function SearchToolbar({
     group: string,
     nextChecked: boolean,
   ) => {
+    if (!subscriptionControlsEnabled) return;
+
     const members = groupMembers(group);
     updateGroupSubscriptions(group, members, nextChecked);
     try {
@@ -137,15 +140,16 @@ export default function SearchToolbar({
           </div>
         </div>
       )}
-      {subscriptionControlsEnabled && groups.length > 0 && (
+      {subscriptionsEnabled && groups.length > 0 && (
         <div className={styles.filterRow}>
-          <span className={styles.filterLabel}>Subscriptions</span>
+          <span className={styles.filterLabel}>Skill groups</span>
           <div className={styles.categories}>
             {groups.map((group) => (
               <GroupSubscriptionPill
                 key={group}
                 group={group}
                 checkboxState={groupState(group)}
+                disabled={!subscriptionControlsEnabled}
                 onCheckboxToggle={(checked) => handleGroupCheckbox(group, checked)}
               />
             ))}
@@ -159,10 +163,12 @@ export default function SearchToolbar({
 function GroupSubscriptionPill({
   group,
   checkboxState,
+  disabled = false,
   onCheckboxToggle,
 }: {
   group: string;
   checkboxState: 'checked' | 'unchecked' | 'indeterminate';
+  disabled?: boolean;
   onCheckboxToggle: (checked: boolean) => void;
 }) {
   const checkboxRef = useRef<HTMLInputElement>(null);
@@ -177,15 +183,19 @@ function GroupSubscriptionPill({
     <label
       className={`${styles.pill} ${styles.groupPill} ${
         checkboxState !== 'unchecked' ? styles.active : ''
-      }`}
+      } ${disabled ? styles.disabledPill : ''}`}
+      title={disabled ? 'User identity required to change group subscriptions' : undefined}
     >
       <input
         ref={checkboxRef}
         type="checkbox"
         className={styles.groupCheckbox}
         checked={checkboxState === 'checked'}
+        disabled={disabled}
         aria-label={`Subscribe to all in ${group}`}
-        onChange={() => onCheckboxToggle(checkboxState !== 'checked')}
+        onChange={() => {
+          if (!disabled) onCheckboxToggle(checkboxState !== 'checked');
+        }}
       />
       <span>{formatName(group)}</span>
     </label>

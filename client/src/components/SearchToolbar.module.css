@@ -96,3 +96,17 @@
   cursor: pointer;
   accent-color: var(--color-primary);
 }
+
+.disabledPill {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.disabledPill:hover {
+  border-color: var(--color-border);
+  color: var(--color-text-muted);
+}
+
+.disabledPill .groupCheckbox {
+  cursor: not-allowed;
+}
