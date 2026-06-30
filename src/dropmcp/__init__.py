@@ -26,7 +26,7 @@ from dropmcp.server import build_server
 
 __all__ = ["create_server", "run", "Settings"]
 
-__version__ = "0.9.0"
+__version__ = "0.10.0"
 
 _HTTP_TRANSPORT = "streamable-http"
 
