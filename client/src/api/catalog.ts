@@ -21,6 +21,7 @@ export interface CatalogItem {
   screenshots: string[];
   examples: string[];
   subscribed?: boolean;
+  subscription_state?: 'none' | 'direct' | 'group' | 'excluded';
   content_markdown?: string | null;
   resources?: SkillResource[];
 }

@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import type { CurrentUserIdentity } from '../src/api/catalog';
+import type { CatalogItem, CurrentUserIdentity } from '../src/api/catalog';
 import { MOCK_ITEMS, MOCK_SERVER } from './fixtures';
 
 function mockCatalogApi(
@@ -15,6 +15,34 @@ function mockCatalogApi(
           items: MOCK_ITEMS,
           server: MOCK_SERVER,
           ...(me ? { me, user: me.email } : {}),
+        }),
+      });
+    }
+    return route.continue();
+  });
+}
+
+function mockSubscriptionCatalogApi(
+  page: import('@playwright/test').Page,
+  items: CatalogItem[],
+  subscribedGroups: string[],
+) {
+  return page.route('**/catalog', (route) => {
+    if (route.request().url().endsWith('/catalog')) {
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          items,
+          server: MOCK_SERVER,
+          subscriptions_enabled: true,
+          user: 'dev@example.com',
+          me: {
+            email: 'dev@example.com',
+            authenticated: true,
+          },
+          subscribed_groups: subscribedGroups,
+          available_groups: ['team-a', 'team-b'],
         }),
       });
     }
@@ -87,6 +115,41 @@ test.describe('Catalog Page', () => {
     });
     await page.goto('/');
     await expect(page.locator('footer')).not.toContainText('Signed in as');
+  });
+
+  test('shows group subscription controls for signed-in users', async ({ page }) => {
+    await mockSubscriptionCatalogApi(
+      page,
+      [
+        {
+          ...MOCK_ITEMS[0],
+          group: 'team-a',
+          subscribed: true,
+          subscription_state: 'group',
+        },
+        {
+          ...MOCK_ITEMS[1],
+          group: 'team-a',
+          subscribed: false,
+          subscription_state: 'excluded',
+        },
+        {
+          ...MOCK_ITEMS[2],
+          group: 'team-b',
+          subscribed: false,
+          subscription_state: 'none',
+        },
+      ],
+      ['team-a'],
+    );
+
+    await page.goto('/');
+
+    await expect(page.getByText('Subscriptions')).toBeVisible();
+    await expect(page.getByRole('checkbox', { name: 'Subscribe to all in team-a' })).toBeVisible();
+    await expect(page.getByRole('checkbox', { name: 'Subscribe to all in team-b' })).toBeVisible();
+    await expect(page.getByRole('checkbox', { name: 'Subscribe to all in team-a' })).toHaveJSProperty('indeterminate', true);
+    await expect(page.getByRole('checkbox', { name: 'Subscribe to all in team-b' })).not.toBeChecked();
   });
 });
 

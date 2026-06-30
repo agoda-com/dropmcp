@@ -122,6 +122,12 @@ class UserSubscriptionStore:
             Column("first_seen_at", DateTime(timezone=True), nullable=False),
             Column("last_seen_at", DateTime(timezone=True), nullable=False),
         )
+        self._onboarding = Table(
+            "user_subscription_onboarding",
+            self._metadata,
+            Column("user_email", String(320), primary_key=True),
+            Column("completed_at", DateTime(timezone=True), nullable=False),
+        )
         if database_url.startswith("sqlite"):
             self._metadata.create_all(self._engine)
 
@@ -215,6 +221,57 @@ class UserSubscriptionStore:
         with self._engine.connect() as conn:
             return conn.execute(stmt).first() is not None
 
+    def has_subscription_preferences(self, user_email: str) -> bool:
+        """Return whether the user has any explicit subscription preference rows."""
+        statements = (
+            select(self._subscriptions.c.user_email).where(
+                self._subscriptions.c.user_email == user_email
+            ),
+            select(self._group_subscriptions.c.user_email).where(
+                self._group_subscriptions.c.user_email == user_email
+            ),
+            select(self._exclusions.c.user_email).where(
+                self._exclusions.c.user_email == user_email
+            ),
+        )
+        with self._engine.connect() as conn:
+            return any(conn.execute(stmt).first() is not None for stmt in statements)
+
+    def onboarding_completed(self, user_email: str) -> bool:
+        stmt = select(self._onboarding.c.user_email).where(
+            self._onboarding.c.user_email == user_email
+        )
+        with self._engine.connect() as conn:
+            return conn.execute(stmt).first() is not None
+
+    def mark_onboarding_completed(self, user_email: str) -> None:
+        if self.onboarding_completed(user_email):
+            return
+        now = datetime.now(timezone.utc)
+        with self._engine.begin() as conn:
+            conn.execute(
+                insert(self._onboarding).values(
+                    user_email=user_email,
+                    completed_at=now,
+                )
+            )
+
+    def subscription_state(
+        self,
+        user_email: str,
+        item_type: str,
+        item_name: str,
+        *,
+        group: str | None = None,
+    ) -> str:
+        if self.is_excluded(user_email, item_type, item_name):
+            return "excluded"
+        if self.is_directly_subscribed(user_email, item_type, item_name):
+            return "direct"
+        if group and self.is_group_subscribed(user_email, group):
+            return "group"
+        return "none"
+
     def is_visible(
         self,
         user_email: str,
@@ -223,13 +280,15 @@ class UserSubscriptionStore:
         *,
         group: str | None = None,
     ) -> bool:
-        if self.is_excluded(user_email, item_type, item_name):
-            return False
-        if self.is_directly_subscribed(user_email, item_type, item_name):
-            return True
-        if group and self.is_group_subscribed(user_email, group):
-            return True
-        return False
+        return (
+            self.subscription_state(
+                user_email,
+                item_type,
+                item_name,
+                group=group,
+            )
+            in {"direct", "group"}
+        )
 
     def add_item(self, user_email: str, item_type: str, item_name: str) -> None:
         self._remove_exclusion(user_email, item_type, item_name)
@@ -287,6 +346,20 @@ class UserSubscriptionStore:
         for group_name in group_names:
             if not self.is_group_subscribed(user_email, group_name):
                 self.add_group(user_email, group_name)
+                added += 1
+        return added
+
+    def add_items(
+        self,
+        user_email: str,
+        items: list[tuple[str, str]],
+    ) -> int:
+        added = 0
+        for item_type, item_name in items:
+            if item_type not in ITEM_TYPES:
+                continue
+            if not self.is_directly_subscribed(user_email, item_type, item_name):
+                self.add_item(user_email, item_type, item_name)
                 added += 1
         return added
 
@@ -350,11 +423,25 @@ def onboard_user_if_new(
     store: UserSubscriptionStore,
     user_email: str,
     available_groups: list[str],
+    available_items: list[tuple[str, str]] | None = None,
 ) -> bool:
-    """Log first sighting and subscribe the user to every catalog group."""
+    """Log sighting and complete first-login group onboarding when appropriate."""
     is_new = store.record_user_seen(user_email)
-    if is_new and available_groups:
-        store.add_groups(user_email, available_groups)
+    available_items = available_items or []
+
+    if store.onboarding_completed(user_email):
+        return is_new
+
+    has_preferences = store.has_subscription_preferences(user_email)
+    if not has_preferences:
+        if available_groups:
+            store.add_groups(user_email, available_groups)
+        if available_items:
+            store.add_items(user_email, available_items)
+
+    if available_groups or available_items or has_preferences:
+        store.mark_onboarding_completed(user_email)
+
     return is_new
 
 
@@ -366,14 +453,19 @@ class SubscriptionCoordinator:
         store: UserSubscriptionStore,
         settings: Settings,
         available_groups: Callable[[], list[str]],
+        available_items: Callable[[], list[tuple[str, str]]] | None = None,
     ) -> None:
         self._store = store
         self._settings = settings
         self._available_groups = available_groups
+        self._available_items = available_items or (lambda: [])
 
     def ensure_initialized(self, user_email: str) -> bool:
         return onboard_user_if_new(
-            self._store, user_email, self._available_groups()
+            self._store,
+            user_email,
+            self._available_groups(),
+            self._available_items(),
         )
 
     def mcp_user(self) -> str | None:

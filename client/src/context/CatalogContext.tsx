@@ -102,12 +102,20 @@ export function CatalogProvider({ children }: { children: ReactNode }) {
       setItems((prev) =>
         prev.map((item) =>
           item.type === type && item.name === name
-            ? { ...item, subscribed }
+            ? {
+                ...item,
+                subscribed,
+                subscription_state: subscribed
+                  ? 'direct'
+                  : item.group && subscribedGroups.includes(item.group)
+                    ? 'excluded'
+                    : 'none',
+              }
             : item,
         ),
       );
     },
-    [],
+    [subscribedGroups],
   );
 
   const updateGroupSubscriptions = useCallback(
@@ -123,7 +131,7 @@ export function CatalogProvider({ children }: { children: ReactNode }) {
       setItems((prev) =>
         prev.map((item) =>
           memberKeys.has(`${item.type}:${item.name}`)
-            ? { ...item, subscribed }
+            ? applyGroupSubscriptionState(item, subscribed)
             : item,
         ),
       );
@@ -156,4 +164,29 @@ export function CatalogProvider({ children }: { children: ReactNode }) {
 
 export function useCatalog() {
   return useContext(CatalogContext);
+}
+
+function applyGroupSubscriptionState(
+  item: CatalogItem,
+  groupSubscribed: boolean,
+): CatalogItem {
+  if (groupSubscribed) {
+    if (item.subscription_state === 'direct') {
+      return item;
+    }
+    return {
+      ...item,
+      subscribed: true,
+      subscription_state: 'group',
+    };
+  }
+
+  if (item.subscription_state === 'direct') {
+    return item;
+  }
+  return {
+    ...item,
+    subscribed: false,
+    subscription_state: 'none',
+  };
 }
