@@ -45,6 +45,12 @@ def test_group_subscription_includes_members(store):
     assert store.is_visible("user@example.com", "skill", "alpha", group="team-a")
     assert store.is_visible("user@example.com", "skill", "beta", group="team-a")
     assert not store.is_visible("user@example.com", "skill", "gamma", group="other")
+    assert (
+        store.subscription_state(
+            "user@example.com", "skill", "alpha", group="team-a"
+        )
+        == "group"
+    )
 
 
 def test_new_group_skill_visible_without_extra_rows(store):
@@ -57,6 +63,12 @@ def test_opt_out_within_subscribed_group(store):
     store.remove_item("user@example.com", "skill", "alpha", group="team-a")
     assert not store.is_visible("user@example.com", "skill", "alpha", group="team-a")
     assert store.is_visible("user@example.com", "skill", "beta", group="team-a")
+    assert (
+        store.subscription_state(
+            "user@example.com", "skill", "alpha", group="team-a"
+        )
+        == "excluded"
+    )
 
 
 def test_re_opt_in_clears_group_exclusion(store):
@@ -95,6 +107,47 @@ def test_onboard_user_if_new_subscribes_all_groups(store):
     assert store.subscribed_groups("user@example.com") == {"team-a", "team-b"}
     assert onboard_user_if_new(store, "user@example.com", ["team-c"]) is False
     assert store.subscribed_groups("user@example.com") == {"team-a", "team-b"}
+
+
+def test_onboard_user_if_new_subscribes_ungrouped_items(store):
+    from dropmcp.subscriptions import onboard_user_if_new
+
+    onboard_user_if_new(
+        store,
+        "user@example.com",
+        [],
+        [("skill", "ungrouped-skill"), ("prompt", "ungrouped-prompt")],
+    )
+
+    assert store.is_directly_subscribed(
+        "user@example.com", "skill", "ungrouped-skill"
+    )
+    assert store.is_directly_subscribed(
+        "user@example.com", "prompt", "ungrouped-prompt"
+    )
+    assert store.onboarding_completed("user@example.com")
+
+
+def test_onboard_seen_user_without_preferences_gets_repaired(store):
+    from dropmcp.subscriptions import onboard_user_if_new
+
+    assert store.record_user_seen("user@example.com") is True
+
+    assert onboard_user_if_new(store, "user@example.com", ["team-a"]) is False
+
+    assert store.subscribed_groups("user@example.com") == {"team-a"}
+    assert store.onboarding_completed("user@example.com")
+
+
+def test_onboard_does_not_restore_removed_groups_after_completion(store):
+    from dropmcp.subscriptions import onboard_user_if_new
+
+    onboard_user_if_new(store, "user@example.com", ["team-a"])
+    store.remove_group("user@example.com", "team-a")
+
+    onboard_user_if_new(store, "user@example.com", ["team-a"])
+
+    assert store.subscribed_groups("user@example.com") == set()
 
 
 def test_subscription_to_dict(store):
@@ -239,6 +292,7 @@ async def test_subscription_http_routes(tmp_path):
         assert body["available_groups"] == ["team-a"]
         assert body["subscribed_groups"] == ["team-a"]
         assert all(item["subscribed"] is True for item in body["items"])
+        assert all(item["subscription_state"] == "group" for item in body["items"])
 
         add = client.post(
             "/api/subscriptions",
@@ -272,7 +326,9 @@ async def test_subscription_http_routes(tmp_path):
         alpha = next(i for i in catalog_after_opt_out["items"] if i["name"] == "alpha")
         beta = next(i for i in catalog_after_opt_out["items"] if i["name"] == "beta")
         assert alpha["subscribed"] is False
+        assert alpha["subscription_state"] == "excluded"
         assert beta["subscribed"] is True
+        assert beta["subscription_state"] == "group"
 
         group_remove = client.delete(
             "/api/subscriptions/group/team-a",
@@ -314,10 +370,48 @@ async def test_subscribe_all_groups_route(tmp_path):
         body = client.get("/catalog", headers=headers).json()
         assert set(body["subscribed_groups"]) == {"team-a", "team-b"}
         assert all(item["subscribed"] for item in body["items"])
+        assert all(item["subscription_state"] == "group" for item in body["items"])
 
         resp = client.post("/api/subscriptions/groups", headers=headers)
         assert resp.status_code == 200
         assert resp.json()["count"] == 0
+
+
+@pytest.mark.asyncio
+async def test_http_first_sight_subscribes_ungrouped_items(tmp_path):
+    from starlette.testclient import TestClient
+
+    from dropmcp.config import Settings
+    from dropmcp.server import build_server
+
+    skills = tmp_path / "skills"
+    prompts = tmp_path / "prompts"
+    skills.mkdir()
+    prompts.mkdir()
+    (skills / "solo").mkdir()
+    (skills / "solo" / "SKILL.md").write_text(
+        "---\nname: solo\ncategory: c\ndescription: Solo\n---\n",
+        encoding="utf-8",
+    )
+
+    settings = Settings.resolve(
+        skills=skills,
+        prompts=prompts,
+        ui_enabled=True,
+        feedback_enabled=False,
+        user_subscriptions_enabled=True,
+        database_url=f"sqlite:///{tmp_path / 'db'}",
+    )
+    mcp = build_server(settings)
+    headers = {"X-User-Email": "dev@example.com"}
+
+    with TestClient(mcp.http_app()) as client:
+        body = client.get("/catalog", headers=headers).json()
+
+        assert body["subscribed_groups"] == []
+        solo = body["items"][0]
+        assert solo["subscribed"] is True
+        assert solo["subscription_state"] == "direct"
 
 
 @pytest.mark.asyncio

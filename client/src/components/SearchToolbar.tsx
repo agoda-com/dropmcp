@@ -58,9 +58,7 @@ export default function SearchToolbar({
   const handleGroupCheckbox = async (
     group: string,
     nextChecked: boolean,
-    event: React.MouseEvent,
   ) => {
-    event.stopPropagation();
     const members = groupMembers(group);
     updateGroupSubscriptions(group, members, nextChecked);
     try {
@@ -127,16 +125,28 @@ export default function SearchToolbar({
           <span className={styles.filterLabel}>Group</span>
           <div className={styles.categories}>
             {groups.map((group) => (
-              <GroupPill
+              <button
+                key={group}
+                type="button"
+                className={`${styles.pill} ${groupFilter === group ? styles.active : ''}`}
+                onClick={() => onGroupChange(groupFilter === group ? null : group)}
+              >
+                {formatName(group)}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+      {subscriptionControlsEnabled && groups.length > 0 && (
+        <div className={styles.filterRow}>
+          <span className={styles.filterLabel}>Subscriptions</span>
+          <div className={styles.categories}>
+            {groups.map((group) => (
+              <GroupSubscriptionPill
                 key={group}
                 group={group}
-                active={groupFilter === group}
                 checkboxState={groupState(group)}
-                showCheckbox={subscriptionControlsEnabled}
-                onFilterClick={() => onGroupChange(groupFilter === group ? null : group)}
-                onCheckboxToggle={(checked, event) =>
-                  handleGroupCheckbox(group, checked, event)
-                }
+                onCheckboxToggle={(checked) => handleGroupCheckbox(group, checked)}
               />
             ))}
           </div>
@@ -146,20 +156,14 @@ export default function SearchToolbar({
   );
 }
 
-function GroupPill({
+function GroupSubscriptionPill({
   group,
-  active,
   checkboxState,
-  showCheckbox,
-  onFilterClick,
   onCheckboxToggle,
 }: {
   group: string;
-  active: boolean;
   checkboxState: 'checked' | 'unchecked' | 'indeterminate';
-  showCheckbox: boolean;
-  onFilterClick: () => void;
-  onCheckboxToggle: (checked: boolean, event: React.MouseEvent) => void;
+  onCheckboxToggle: (checked: boolean) => void;
 }) {
   const checkboxRef = useRef<HTMLInputElement>(null);
 
@@ -170,26 +174,20 @@ function GroupPill({
   }, [checkboxState]);
 
   return (
-    <button
-      type="button"
-      className={`${styles.pill} ${styles.groupPill} ${active ? styles.active : ''}`}
-      onClick={onFilterClick}
+    <label
+      className={`${styles.pill} ${styles.groupPill} ${
+        checkboxState !== 'unchecked' ? styles.active : ''
+      }`}
     >
-      {showCheckbox && (
-        <input
-          ref={checkboxRef}
-          type="checkbox"
-          className={styles.groupCheckbox}
-          checked={checkboxState === 'checked'}
-          aria-label={`Subscribe to all in ${group}`}
-          onClick={(e) => {
-            e.stopPropagation();
-            onCheckboxToggle(checkboxState !== 'checked', e);
-          }}
-          onChange={() => {}}
-        />
-      )}
+      <input
+        ref={checkboxRef}
+        type="checkbox"
+        className={styles.groupCheckbox}
+        checked={checkboxState === 'checked'}
+        aria-label={`Subscribe to all in ${group}`}
+        onChange={() => onCheckboxToggle(checkboxState !== 'checked')}
+      />
       <span>{formatName(group)}</span>
-    </button>
+    </label>
   );
 }

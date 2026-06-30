@@ -82,6 +82,7 @@ def _entry_to_dict(
     catalog: CatalogProvider,
     *,
     subscribed: bool | None = None,
+    subscription_state: str | None = None,
     include_content: bool = False,
 ) -> dict:
     prefix = f"/catalog/{entry.type}/{entry.name}"
@@ -105,6 +106,8 @@ def _entry_to_dict(
     }
     if subscribed is not None:
         payload["subscribed"] = subscribed
+    if subscription_state is not None:
+        payload["subscription_state"] = subscription_state
     if include_content:
         payload["content_markdown"] = catalog.read_main_markdown(entry.type, entry.name)
         payload["resources"] = [
@@ -179,10 +182,18 @@ def build_server(settings: Settings) -> FastMCP:
                 {e.group for e in subscription_catalog.get_entries() if e.group}
             )
 
+        def _ungrouped_subscription_items() -> list[tuple[str, str]]:
+            return sorted(
+                (e.type, e.name)
+                for e in subscription_catalog.get_entries()
+                if not e.group
+            )
+
         subscription_coordinator = SubscriptionCoordinator(
             subscription_store,
             settings,
             _subscription_groups,
+            _ungrouped_subscription_items,
         )
 
     mcp.add_provider(
@@ -303,11 +314,20 @@ def _register_catalog_routes(
         items = []
         for entry in catalog.get_entries():
             subscribed = None
+            subscription_state = None
             if user is not None and subscription_store is not None:
-                subscribed = subscription_store.is_visible(
+                subscription_state = subscription_store.subscription_state(
                     user, entry.type, entry.name, group=entry.group
                 )
-            items.append(_entry_to_dict(entry, catalog, subscribed=subscribed))
+                subscribed = subscription_state in {"direct", "group"}
+            items.append(
+                _entry_to_dict(
+                    entry,
+                    catalog,
+                    subscribed=subscribed,
+                    subscription_state=subscription_state,
+                )
+            )
 
         if user is not None and subscription_store is not None:
             subscribed_groups = sorted(subscription_store.subscribed_groups(user))
@@ -337,16 +357,24 @@ def _register_catalog_routes(
             return JSONResponse({"error": "not found"}, status_code=404)
         user = _request_user(request, settings, subscription_coordinator)
         subscribed = None
+        subscription_state = None
         if (
             user is not None
             and subscription_store is not None
             and settings.user_subscriptions_enabled
         ):
-            subscribed = subscription_store.is_visible(
+            subscription_state = subscription_store.subscription_state(
                 user, entry.type, entry.name, group=entry.group
             )
+            subscribed = subscription_state in {"direct", "group"}
         return JSONResponse(
-            _entry_to_dict(entry, catalog, subscribed=subscribed, include_content=True)
+            _entry_to_dict(
+                entry,
+                catalog,
+                subscribed=subscribed,
+                subscription_state=subscription_state,
+                include_content=True,
+            )
         )
 
     @mcp.custom_route(
