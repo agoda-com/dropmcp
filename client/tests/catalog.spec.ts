@@ -26,6 +26,7 @@ function mockSubscriptionCatalogApi(
   page: import('@playwright/test').Page,
   items: CatalogItem[],
   subscribedGroups: string[],
+  user: string | null = 'dev@example.com',
 ) {
   return page.route('**/catalog', (route) => {
     if (route.request().url().endsWith('/catalog')) {
@@ -36,10 +37,10 @@ function mockSubscriptionCatalogApi(
           items,
           server: MOCK_SERVER,
           subscriptions_enabled: true,
-          user: 'dev@example.com',
+          user,
           me: {
-            email: 'dev@example.com',
-            authenticated: true,
+            email: user,
+            authenticated: user !== null,
           },
           subscribed_groups: subscribedGroups,
           available_groups: ['team-a', 'team-b'],
@@ -145,11 +146,74 @@ test.describe('Catalog Page', () => {
 
     await page.goto('/');
 
-    await expect(page.getByText('Subscriptions')).toBeVisible();
+    await expect(page.getByText('Skill groups')).toBeVisible();
     await expect(page.getByRole('checkbox', { name: 'Subscribe to all in team-a' })).toBeVisible();
     await expect(page.getByRole('checkbox', { name: 'Subscribe to all in team-b' })).toBeVisible();
     await expect(page.getByRole('checkbox', { name: 'Subscribe to all in team-a' })).toHaveJSProperty('indeterminate', true);
     await expect(page.getByRole('checkbox', { name: 'Subscribe to all in team-b' })).not.toBeChecked();
+  });
+
+  test('updates item subscription checkbox immediately after subscribe', async ({ page }) => {
+    const requests: string[] = [];
+    await mockSubscriptionCatalogApi(
+      page,
+      MOCK_ITEMS.map((item) => ({
+        ...item,
+        subscribed: false,
+        subscription_state: 'none',
+      })),
+      [],
+    );
+    await page.route('**/api/subscriptions', async (route) => {
+      if (route.request().method() !== 'POST') return route.continue();
+      requests.push(route.request().postData() ?? '');
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: '{"status":"subscribed"}',
+      });
+    });
+
+    await page.goto('/');
+
+    const checkbox = page.getByRole('checkbox', { name: 'Subscribe to hello-world' });
+    await expect(checkbox).not.toBeChecked();
+    await checkbox.click();
+
+    await expect(checkbox).toBeChecked();
+    await expect.poll(() => requests.length).toBe(1);
+    expect(JSON.parse(requests[0])).toEqual({
+      item_type: 'skill',
+      item_name: 'hello-world',
+    });
+  });
+
+  test('shows disabled group subscription controls without identity', async ({ page }) => {
+    await mockSubscriptionCatalogApi(
+      page,
+      [
+        {
+          ...MOCK_ITEMS[0],
+          group: 'team-a',
+          subscribed: false,
+          subscription_state: 'none',
+        },
+        {
+          ...MOCK_ITEMS[1],
+          group: 'team-b',
+          subscribed: false,
+          subscription_state: 'none',
+        },
+      ],
+      [],
+      null,
+    );
+
+    await page.goto('/');
+
+    await expect(page.getByText('Skill groups')).toBeVisible();
+    await expect(page.getByRole('checkbox', { name: 'Subscribe to all in team-a' })).toBeDisabled();
+    await expect(page.getByRole('checkbox', { name: 'Subscribe to all in team-b' })).toBeDisabled();
   });
 });
 
