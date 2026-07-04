@@ -165,6 +165,7 @@ class Settings:
     port: int
     ui_enabled: bool
     feedback_enabled: bool
+    repo_feedback_enabled: bool
     user_subscriptions_enabled: bool
     user_header: str
     reload: bool
@@ -188,6 +189,7 @@ class Settings:
         port: int | None = None,
         ui_enabled: bool | None = None,
         feedback_enabled: bool | None = None,
+        repo_feedback_enabled: bool | None = None,
         user_subscriptions_enabled: bool | None = None,
         user_header: str | None = None,
         reload: bool | None = None,
@@ -225,6 +227,9 @@ class Settings:
             ui_enabled=_first(ui_enabled, _env_bool("DROPMCP_UI"), True),
             feedback_enabled=_first(
                 feedback_enabled, _env_bool("DROPMCP_FEEDBACK"), True
+            ),
+            repo_feedback_enabled=_first(
+                repo_feedback_enabled, _env_bool("DROPMCP_REPO_FEEDBACK"), False
             ),
             user_subscriptions_enabled=_first(
                 user_subscriptions_enabled,

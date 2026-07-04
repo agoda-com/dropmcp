@@ -19,6 +19,8 @@ interface CatalogState {
   loading: boolean;
   error: string | null;
   subscriptionsEnabled: boolean;
+  feedbackEnabled: boolean;
+  repoFeedbackEnabled: boolean;
   user: string | null;
   me: CurrentUserIdentity;
   subscriptionControlsEnabled: boolean;
@@ -52,6 +54,8 @@ const CatalogContext = createContext<CatalogState>({
   loading: true,
   error: null,
   subscriptionsEnabled: false,
+  feedbackEnabled: false,
+  repoFeedbackEnabled: false,
   user: null,
   me: anonymousUser,
   subscriptionControlsEnabled: false,
@@ -66,6 +70,8 @@ export function CatalogProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [subscriptionsEnabled, setSubscriptionsEnabled] = useState(false);
+  const [feedbackEnabled, setFeedbackEnabled] = useState(false);
+  const [repoFeedbackEnabled, setRepoFeedbackEnabled] = useState(false);
   const [user, setUser] = useState<string | null>(null);
   const [me, setMe] = useState<CurrentUserIdentity>(anonymousUser);
   const [subscribedGroups, setSubscribedGroups] = useState<string[]>([]);
@@ -76,6 +82,8 @@ export function CatalogProvider({ children }: { children: ReactNode }) {
         setItems(data.items);
         setServer(data.server);
         setSubscriptionsEnabled(data.subscriptionsEnabled);
+        setFeedbackEnabled(data.feedbackEnabled);
+        setRepoFeedbackEnabled(data.repoFeedbackEnabled);
         setUser(data.user);
         setMe(data.me);
         setSubscribedGroups(data.subscribedGroups);
@@ -149,6 +157,8 @@ export function CatalogProvider({ children }: { children: ReactNode }) {
         loading,
         error,
         subscriptionsEnabled,
+        feedbackEnabled,
+        repoFeedbackEnabled,
         user,
         me,
         subscriptionControlsEnabled,

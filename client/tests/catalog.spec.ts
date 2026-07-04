@@ -14,6 +14,7 @@ function mockCatalogApi(
         body: JSON.stringify({
           items: MOCK_ITEMS,
           server: MOCK_SERVER,
+          feedback_enabled: true,
           ...(me ? { me, user: me.email } : {}),
         }),
       });
@@ -37,6 +38,7 @@ function mockSubscriptionCatalogApi(
           items,
           server: MOCK_SERVER,
           subscriptions_enabled: true,
+          feedback_enabled: true,
           user,
           me: {
             email: user,
@@ -52,9 +54,21 @@ function mockSubscriptionCatalogApi(
 }
 
 function mockDetailApi(page: import('@playwright/test').Page) {
-  return page.route('**/catalog/**', (route) => {
-    const url = route.request().url();
-    const match = url.match(/\/catalog\/(\w+)\/([\w-]+)$/);
+  return page.route('**/catalog**', (route) => {
+    const url = new URL(route.request().url());
+    if (url.pathname === '/catalog') {
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          items: MOCK_ITEMS,
+          server: MOCK_SERVER,
+          feedback_enabled: true,
+        }),
+      });
+    }
+
+    const match = url.pathname.match(/\/catalog\/(\w+)\/([\w-]+)$/);
     if (match) {
       const [, type, name] = match;
       const item = MOCK_ITEMS.find((i) => i.type === type && i.name === name);

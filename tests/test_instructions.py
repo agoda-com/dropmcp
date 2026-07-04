@@ -225,3 +225,52 @@ def test_build_instructions_feedback_enabled_adds_agent_work_guidance(tmp_path):
     assert "feedback_type" in result
     assert "agent_work" in result
     assert "details.artifacts" in result
+
+
+def test_build_instructions_repo_feedback_enabled_adds_guidance(tmp_path):
+    skills = tmp_path / "skills"
+    prompts = tmp_path / "prompts"
+    skills.mkdir()
+    prompts.mkdir()
+
+    tpl = tmp_path / "INSTRUCTIONS.md"
+    tpl.write_text("Static instructions only.", encoding="utf-8")
+
+    result = build_server_instructions(
+        tpl,
+        skills,
+        prompts,
+        repo_feedback_enabled=True,
+    )
+    assert result is not None
+    assert "record_repo_feedback" in result
+    assert "repository itself" in result
+    assert "group/project" in result
+
+
+def test_build_instructions_repo_feedback_disabled_omits_guidance(tmp_path):
+    skills = tmp_path / "skills"
+    prompts = tmp_path / "prompts"
+    skills.mkdir()
+    prompts.mkdir()
+
+    tpl = tmp_path / "INSTRUCTIONS.md"
+    tpl.write_text("Static instructions only.", encoding="utf-8")
+
+    result = build_server_instructions(tpl, skills, prompts)
+    assert result == "Static instructions only."
+    assert "record_repo_feedback" not in result
+
+
+def test_build_instructions_composes_feedback_sections_without_template(tmp_path):
+    result = build_server_instructions(
+        tmp_path / "missing.md",
+        tmp_path / "skills",
+        tmp_path / "prompts",
+        feedback_enabled=True,
+        repo_feedback_enabled=True,
+    )
+
+    assert result is not None
+    assert "feedback_type" in result
+    assert "record_repo_feedback" in result
