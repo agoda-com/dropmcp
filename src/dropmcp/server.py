@@ -27,6 +27,11 @@ from dropmcp.identity import user_from_request
 from dropmcp.instructions import build_server_instructions
 from dropmcp.middleware import TelemetryMiddleware
 from dropmcp.prompts import PromptsDirectoryProvider
+from dropmcp.repo_feedback import (
+    RepoFeedbackProvider,
+    RepoFeedbackStore,
+    repo_feedback_to_dict,
+)
 from dropmcp.skills import FilteredSkillsProvider
 from dropmcp.subscriptions import (
     ITEM_TYPES,
@@ -152,6 +157,7 @@ def build_server(settings: Settings) -> FastMCP:
         settings.skills_dir,
         settings.prompts_dir,
         feedback_enabled=settings.feedback_enabled,
+        repo_feedback_enabled=settings.repo_feedback_enabled,
     )
 
     mcp = FastMCP(
@@ -222,12 +228,21 @@ def build_server(settings: Settings) -> FastMCP:
     if feedback_store is not None:
         mcp.add_provider(FeedbackProvider(feedback_store))
 
+    repo_feedback_store = (
+        RepoFeedbackStore(settings.database_url)
+        if settings.repo_feedback_enabled
+        else None
+    )
+    if repo_feedback_store is not None:
+        mcp.add_provider(RepoFeedbackProvider(repo_feedback_store))
+
     if settings.ui_enabled:
         eval_store = _resolve_eval_results_store(settings)
         _register_catalog_routes(
             mcp,
             settings,
             feedback_store,
+            repo_feedback_store,
             eval_store,
             subscription_store,
             subscription_coordinator,
@@ -254,6 +269,7 @@ def _register_catalog_routes(
     mcp: FastMCP,
     settings: Settings,
     feedback_store: FeedbackStore | None,
+    repo_feedback_store: RepoFeedbackStore | None,
     eval_store: EvalResultsStore | None,
     subscription_store: UserSubscriptionStore | None,
     subscription_coordinator: SubscriptionCoordinator | None,
@@ -340,6 +356,8 @@ def _register_catalog_routes(
             "me": _identity_payload(user),
             "subscribed_groups": subscribed_groups,
             "available_groups": available_groups,
+            "feedback_enabled": settings.feedback_enabled,
+            "repo_feedback_enabled": settings.repo_feedback_enabled,
         }
         return JSONResponse(payload)
 
@@ -437,6 +455,9 @@ def _register_catalog_routes(
 
     if feedback_store is not None:
         _register_feedback_routes(mcp, feedback_store)
+
+    if repo_feedback_store is not None:
+        _register_repo_feedback_routes(mcp, repo_feedback_store)
 
     if subscription_store is not None and settings.user_subscriptions_enabled:
         _register_subscription_routes(
@@ -633,6 +654,59 @@ def _register_feedback_routes(mcp: FastMCP, store: FeedbackStore) -> None:
         if updated is None:
             return JSONResponse({"error": "not found"}, status_code=404)
         return JSONResponse(feedback_to_dict(updated))
+
+
+def _register_repo_feedback_routes(mcp: FastMCP, store: RepoFeedbackStore) -> None:
+    @mcp.custom_route("/api/repo-feedback", methods=["GET"])
+    async def repo_feedback_list(request: Request) -> JSONResponse:
+        params = request.query_params
+        items = store.list(
+            search=params.get("search"),
+            repo=params.get("repo"),
+            category=params.get("category"),
+            status=params.get("status"),
+            model=params.get("model"),
+            client=params.get("client"),
+            sort=params.get("sort"),
+        )
+        return JSONResponse(
+            {"items": [repo_feedback_to_dict(item) for item in items]}
+        )
+
+    @mcp.custom_route("/api/repo-feedback/{entry_id}", methods=["GET"])
+    async def repo_feedback_get(request: Request) -> JSONResponse:
+        entry = store.get(request.path_params["entry_id"])
+        if entry is None:
+            return JSONResponse({"error": "not found"}, status_code=404)
+        return JSONResponse(repo_feedback_to_dict(entry))
+
+    @mcp.custom_route("/api/repo-feedback/{entry_id}", methods=["PATCH"])
+    async def repo_feedback_patch(request: Request) -> JSONResponse:
+        try:
+            body = await request.json()
+        except Exception:
+            return JSONResponse({"error": "invalid json"}, status_code=400)
+
+        if not isinstance(body, dict):
+            return JSONResponse({"error": "invalid body"}, status_code=400)
+
+        status = body.get("status")
+        resolution_url = body.get("resolution_url")
+        if status is None and resolution_url is None:
+            return JSONResponse({"error": "nothing to update"}, status_code=400)
+
+        try:
+            updated = store.patch(
+                request.path_params["entry_id"],
+                status=status,
+                resolution_url=resolution_url,
+            )
+        except ValueError as exc:
+            return JSONResponse({"error": str(exc)}, status_code=400)
+
+        if updated is None:
+            return JSONResponse({"error": "not found"}, status_code=404)
+        return JSONResponse(repo_feedback_to_dict(updated))
 
 
 def _register_eval_results_routes(

@@ -43,6 +43,11 @@
   color: var(--brand-green);
 }
 
+.statusWontfix {
+  background: rgba(100, 116, 139, 0.16);
+  color: var(--color-text-muted);
+}
+
 .typeBadge {
   font-size: 0.75rem;
   font-weight: 600;

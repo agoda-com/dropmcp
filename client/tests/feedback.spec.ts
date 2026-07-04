@@ -8,7 +8,11 @@ function mockCatalogApi(page: Page) {
       return route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify({ items: MOCK_ITEMS, server: MOCK_SERVER }),
+        body: JSON.stringify({
+          items: MOCK_ITEMS,
+          server: MOCK_SERVER,
+          feedback_enabled: true,
+        }),
       });
     }
     return route.continue();

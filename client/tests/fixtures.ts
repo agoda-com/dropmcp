@@ -1,5 +1,6 @@
 import type { CatalogItem } from '../src/api/catalog';
 import type { FeedbackItem } from '../src/api/feedback';
+import type { RepoFeedbackItem } from '../src/api/repoFeedback';
 
 export const MOCK_ITEMS: CatalogItem[] = [
   {
@@ -121,5 +122,45 @@ export const MOCK_FEEDBACK: FeedbackItem[] = [
     details: null,
     status: 'actioned',
     resolution_url: null,
+  },
+];
+
+export const MOCK_REPO_FEEDBACK: RepoFeedbackItem[] = [
+  {
+    id: 'rf-1',
+    created_at: '2026-06-17 10:00',
+    last_seen_at: '2026-06-18 12:00',
+    category: 'flaky_test',
+    repo: 'agoda-com/dropmcp',
+    summary: 'FeedbackSpec fails intermittently during local runs.',
+    impact: 'Agents rerun the same suite before trusting verification.',
+    suggested_fix: 'Quarantine or stabilize FeedbackSpec setup.',
+    model: 'gpt-5',
+    client: 'vscode',
+    details: {
+      tests: ['FeedbackSpec'],
+      commands: ['pytest tests/test_feedback.py'],
+    },
+    fingerprint: 'abc',
+    occurrence_count: 8,
+    status: 'new',
+    resolution_url: null,
+  },
+  {
+    id: 'rf-2',
+    created_at: '2026-06-16 09:15',
+    last_seen_at: '2026-06-16 09:15',
+    category: 'docs_gap',
+    repo: 'agoda-com/dropmcp',
+    summary: 'Local setup docs do not mention the required browser install.',
+    impact: 'Playwright verification failed until the missing setup was inferred.',
+    suggested_fix: null,
+    model: 'claude-opus-4',
+    client: 'cursor',
+    details: null,
+    fingerprint: 'def',
+    occurrence_count: 2,
+    status: 'triaged',
+    resolution_url: 'https://github.com/agoda-com/dropmcp/issues/34',
   },
 ];

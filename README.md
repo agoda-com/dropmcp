@@ -29,6 +29,8 @@ skills/prompts MCP servers, extracted as a standalone library.
   OpenTelemetry metrics and traces.
 - **Agent feedback loop** — a `record_feedback` tool and triage UI for when
   agents get corrected.
+- **Repository feedback backlog** — an optional `record_repo_feedback` tool and
+  triage UI for flaky tests, CI-only checks, setup gaps, and other repo friction.
 - **Per-user subscriptions** — optional opt-in so each user's agent sees only a
   curated subset of the catalog.
 
@@ -142,10 +144,11 @@ default).
 | `port` | `DROPMCP_PORT` | `8000` | bind port |
 | `ui_enabled` | `DROPMCP_UI` | `true` | serve the catalog HTTP routes |
 | `feedback_enabled` | `DROPMCP_FEEDBACK` | `true` | enable the `record_feedback` tool, feedback HTTP routes, and always-on instructions |
+| `repo_feedback_enabled` | `DROPMCP_REPO_FEEDBACK` | `false` | enable the optional `record_repo_feedback` tool, repo feedback HTTP routes, and always-on instructions |
 | `user_subscriptions_enabled` | `DROPMCP_USER_SUBSCRIPTIONS` | `false` | per-user skill/prompt opt-in over MCP and subscription HTTP API |
 | `user_header` | `DROPMCP_USER_HEADER` | `X-User-Email` | HTTP header carrying the trusted caller identity |
 | `reload` | `DROPMCP_RELOAD` | `false` | re-scan skills/prompts on every request |
-| `database_url` | `DROPMCP_DATABASE_URL` | `sqlite:///<cwd>/dropmcp.db` | feedback database (SQLite file or Postgres URL) |
+| `database_url` | `DROPMCP_DATABASE_URL` | `sqlite:///<cwd>/dropmcp.db` | feedback database tables (SQLite file or Postgres URL) |
 | `eval_results_project` | `DROPMCP_EVAL_RESULTS_PROJECT` | – | GitLab project path for E2E eval results (enables `/api/telemetry` when a store is available) |
 | `eval_results_commit_sha` | `DROPMCP_EVAL_RESULTS_COMMIT_SHA` | `COMMIT_SHA` file | deployed commit to filter eval results |
 | `catalog_defaults` | `DROPMCP_CATALOG_DEFAULTS` | bundled SVGs | category thumbnail fallbacks for the catalog grid |
@@ -292,6 +295,59 @@ to install. Disable the whole feature (tool, HTTP routes, and instructions) with
 
 In containers, mount a volume over the SQLite file (or use Postgres) or feedback
 is lost when the pod restarts.
+
+## Repository feedback
+
+Set `DROPMCP_REPO_FEEDBACK=true` (or `repo_feedback_enabled=True`) to enable a
+second feedback channel for repository friction. It is disabled by default.
+
+- **`record_repo_feedback` MCP tool** — agents report repo-caused friction such
+  as CI-only tests, flaky tests, warning noise, slow feedback loops, missing
+  setup docs, dependency issues, and missing scripts.
+- **Separate storage** — rows are written to `repo_feedback` in the same SQLite
+  or Postgres database configured by `DROPMCP_DATABASE_URL`.
+- **Deduplication** — open rows with the same normalized repo, category, and
+  summary are collapsed by fingerprint and `occurrence_count` is incremented.
+  Closed rows (`actioned`, `wontfix`) do not absorb new reports.
+- **Repo feedback UI/API** — browse and triage at `/repo-feedback`, backed by
+  `GET /api/repo-feedback`, `GET /api/repo-feedback/{id}`, and
+  `PATCH /api/repo-feedback/{id}`.
+
+Categories are fixed: `tests_require_ci`, `flaky_test`, `build_warnings`,
+`lint_noise`, `slow_feedback`, `local_setup`, `docs_gap`, `dependency_issue`,
+`tooling_gap`, and `other`. Status values are `new`, `triaged`, `actioned`, and
+`wontfix`.
+
+SQLite auto-creates the `repo_feedback` table and lightly backfills missing
+columns for existing local databases. Hosted Postgres deployments must ship the
+equivalent SyncDB migration. The core table shape is:
+
+```sql
+CREATE TABLE repo_feedback (
+  id text PRIMARY KEY,
+  created_at timestamptz NOT NULL,
+  last_seen_at timestamptz NOT NULL,
+  category text NOT NULL,
+  repo text NOT NULL,
+  summary text NOT NULL,
+  impact text NOT NULL,
+  suggested_fix text,
+  model text NOT NULL,
+  client text,
+  details text,
+  fingerprint text NOT NULL,
+  occurrence_count integer NOT NULL DEFAULT 1,
+  status text NOT NULL DEFAULT 'new',
+  resolution_url text
+);
+
+CREATE INDEX repo_feedback_fingerprint_idx ON repo_feedback (fingerprint);
+CREATE INDEX repo_feedback_repo_status_idx ON repo_feedback (repo, status);
+```
+
+The same privacy rule applies: no secrets, PII, customer data, proprietary code
+snippets, or verbatim prompts. Repo feedback instructions are injected only when
+the feature flag is enabled.
 
 ## Trusted user identity
 

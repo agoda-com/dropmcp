@@ -29,12 +29,35 @@ log = logging.getLogger(__name__)
 SKILLS_PLACEHOLDER = "{{INSTRUCTION_SUMMARIES}}"
 PROMPTS_PLACEHOLDER = "{{PROMPT_SUMMARIES}}"
 FEEDBACK_SECTION_RESOURCE = "feedback_instructions.md"
+REPO_FEEDBACK_SECTION_RESOURCE = "repo_feedback_instructions.md"
+
+
+def _packaged_section(resource_name: str) -> str:
+    path = Path(resources.files("dropmcp") / resource_name)
+    return path.read_text(encoding="utf-8").strip()
 
 
 def _feedback_section() -> str:
     """The always-on feedback guidance packaged with dropmcp."""
-    path = Path(resources.files("dropmcp") / FEEDBACK_SECTION_RESOURCE)
-    return path.read_text(encoding="utf-8").strip()
+    return _packaged_section(FEEDBACK_SECTION_RESOURCE)
+
+
+def _repo_feedback_section() -> str:
+    """The always-on repo feedback guidance packaged with dropmcp."""
+    return _packaged_section(REPO_FEEDBACK_SECTION_RESOURCE)
+
+
+def _enabled_sections(
+    *,
+    feedback_enabled: bool,
+    repo_feedback_enabled: bool,
+) -> list[str]:
+    sections: list[str] = []
+    if feedback_enabled:
+        sections.append(_feedback_section())
+    if repo_feedback_enabled:
+        sections.append(_repo_feedback_section())
+    return sections
 
 _FRONTMATTER_RE = re.compile(r"^---\s*\n(.*?)\n---\s*\n", re.DOTALL)
 
@@ -98,16 +121,21 @@ def build_server_instructions(
     prompts_dir: Path,
     *,
     feedback_enabled: bool = False,
+    repo_feedback_enabled: bool = False,
 ) -> str | None:
     """Read `INSTRUCTIONS.md` and substitute the summaries placeholders.
 
     `{{INSTRUCTION_SUMMARIES}}` is replaced with a bullet list of skill
     `instruction_summary` values; `{{PROMPT_SUMMARIES}}` is replaced with the
-    same for prompts. When ``feedback_enabled`` is set, the always-on feedback
-    guidance is appended as its own section. Returns None when there is no
-    template and feedback is disabled, so callers can pass `None` through to
-    FastMCP (which treats it as "no instructions").
+    same for prompts. Enabled always-on guidance sections are appended after
+    the template. Returns None when there is no template and no section is
+    enabled, so callers can pass `None` through to FastMCP (which treats it as
+    "no instructions").
     """
+    sections = _enabled_sections(
+        feedback_enabled=feedback_enabled,
+        repo_feedback_enabled=repo_feedback_enabled,
+    )
     template = (
         template_path.read_text(encoding="utf-8").strip()
         if template_path.exists()
@@ -115,7 +143,7 @@ def build_server_instructions(
     )
 
     if template is None:
-        return _feedback_section() if feedback_enabled else None
+        return "\n\n".join(sections) if sections else None
 
     if SKILLS_PLACEHOLDER in template:
         template = template.replace(
@@ -135,7 +163,7 @@ def build_server_instructions(
             ),
         )
 
-    if feedback_enabled:
-        template = f"{template}\n\n{_feedback_section()}"
+    if sections:
+        template = "\n\n".join([template, *sections])
 
     return template

@@ -1,9 +1,16 @@
 import { useCatalog } from '../context/CatalogContext';
 import { Link } from 'react-router-dom';
+import type { ReactNode } from 'react';
 import styles from './Header.module.css';
 
 export default function Header() {
-  const { server } = useCatalog();
+  const { server, feedbackEnabled, repoFeedbackEnabled } = useCatalog();
+  const links = [
+    feedbackEnabled ? <Link key="feedback" to="/feedback">Feedback</Link> : null,
+    repoFeedbackEnabled
+      ? <Link key="repo-feedback" to="/repo-feedback">Repo feedback</Link>
+      : null,
+  ].filter(Boolean);
 
   return (
     <header className={styles.banner}>
@@ -14,11 +21,17 @@ export default function Header() {
         <div>
           <h1>{server.name}</h1>
           <p>
-            Browse skills and prompts for AI agents ·{' '}
-            <Link to="/feedback">Feedback</Link>
+            Browse skills and prompts for AI agents
+            {links.length > 0 && <> · {joinLinks(links)}</>}
           </p>
         </div>
       </div>
     </header>
+  );
+}
+
+function joinLinks(links: ReactNode[]) {
+  return links.flatMap((link, index) =>
+    index === 0 ? [link] : [' · ', link],
   );
 }
