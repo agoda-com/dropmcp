@@ -44,10 +44,19 @@ class _RecordingMeter:
         return inst
 
 
-def _request(headers: dict[str, str]):
+def _request(
+    headers: dict[str, str],
+    *,
+    client_host: str | None = None,
+    client_port: int | None = None,
+):
     return SimpleNamespace(
         headers=Headers(headers),
-        client=None,
+        client=(
+            SimpleNamespace(host=client_host, port=client_port)
+            if client_host is not None
+            else None
+        ),
         method="POST",
         url=SimpleNamespace(path="/mcp"),
     )
@@ -55,7 +64,7 @@ def _request(headers: dict[str, str]):
 
 def _mcp_context(
     *,
-    session_id: str = "session-1",
+    session_id: str | None = "session-1",
     transport: str = "streamable-http",
     request_id: str = "request-1",
     meta: dict[str, object] | None = None,
@@ -334,6 +343,67 @@ def test_initialize_metadata_is_cached_and_reused_by_track(monkeypatch, caplog):
         assert skill_event["mcp.client.version.major_minor"] == "0.142"
         assert skill_event["mcp.client.source"] == "initialize"
         assert skill_event["mcp.client.capabilities"] == "roots,sampling"
+
+
+def test_codex_initialize_without_user_agent_is_reused_by_peer(monkeypatch):
+    with fresh_telemetry(monkeypatch) as telemetry:
+        recorder = _RecordingMeter()
+        instruments = telemetry._create_instruments(recorder)
+        telemetry._state["instruments"] = instruments
+        telemetry._state["active"] = True
+
+        active_request = _request({}, client_host="127.0.0.1", client_port=54321)
+        monkeypatch.setattr(
+            "fastmcp.server.dependencies.get_http_request",
+            lambda: active_request,
+        )
+        monkeypatch.setattr(
+            "fastmcp.server.dependencies.get_context",
+            lambda: _mcp_context(session_id=None),
+        )
+        init_context = _middleware_context(
+            message=SimpleNamespace(
+                params={
+                    "protocolVersion": "2025-03-26",
+                    "clientInfo": {
+                        "name": "codex-mcp-client",
+                        "version": "0.142.3",
+                    },
+                }
+            ),
+            context=_mcp_context(session_id=None),
+        )
+
+        telemetry.record_mcp_initialization(
+            outcome="success",
+            duration_ms=1.0,
+            context=init_context,
+        )
+
+        active_request = _request(
+            {"mcp-session-id": "session-after-init"},
+            client_host="127.0.0.1",
+            client_port=54321,
+        )
+        list_context = _mcp_context(session_id=None, request_id="request-2")
+        telemetry.record_tool_listing(
+            outcome="success",
+            duration_ms=2.0,
+            tool_count=3,
+            context=list_context,
+        )
+
+        attrs = instruments.mcp_tool_listings.records[-1][2]
+        assert attrs["client"] == "codex"
+        assert attrs["client_version"] == "0.142"
+        assert attrs["client_source"] == "initialize"
+
+        active_request = _request(
+            {"mcp-session-id": "session-after-init"},
+            client_host="127.0.0.1",
+            client_port=60000,
+        )
+        assert telemetry.client_bucket() == "codex"
 
 
 def test_request_meta_is_sanitized_and_bucketed_for_metrics(monkeypatch, caplog):
