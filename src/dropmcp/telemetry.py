@@ -53,6 +53,7 @@ _MAX_LOG_STRING_LENGTH = 256
 _MAX_META_STRING_LENGTH = 128
 _MAX_ERROR_MESSAGE_LENGTH = 512
 _SESSION_METADATA_CACHE_LIMIT = 2048
+_PEER_METADATA_CACHE_LIMIT = 2048
 
 _ALLOWED_META_KEYS = frozenset(
     {
@@ -87,6 +88,25 @@ _SESSION_CACHE_FIELDS = frozenset(
     }
 )
 
+_PEER_CACHE_FIELDS = frozenset(
+    {
+        "mcp.protocol_version",
+        "mcp.client.name.raw",
+        "mcp.client.name",
+        "mcp.client.version.raw",
+        "mcp.client.version.major_minor",
+        "mcp.client.source",
+        "mcp.client.capabilities",
+        "client_name",
+        "client_version",
+        "http.originator",
+        "user_agent.original",
+        "user_agent.name",
+        "user_agent.version",
+        "mcp.meta.agent",
+    }
+)
+
 _KNOWN_CLIENT_SOURCES = {"initialize", "originator", "user_agent", "meta", "unknown"}
 _KNOWN_ENVIRONMENTS = {
     "ci",
@@ -118,6 +138,7 @@ _event_logger = logging.getLogger("dropmcp.events")
 _event_logging_configured = False
 _session_metadata_lock = threading.Lock()
 _session_metadata: dict[str, dict[str, Any]] = {}
+_peer_metadata: dict[str, dict[str, Any]] = {}
 
 # Stable metric names for dashboards and contract tests.
 METRIC_NAMES = (
@@ -640,6 +661,67 @@ def _cache_session_metadata(fields: Mapping[str, Any]) -> None:
         _session_metadata[session_id] = cached
 
 
+def _cache_identified_session_metadata(fields: Mapping[str, Any]) -> None:
+    if _normalize_client_name(fields.get("mcp.client.name")) == "unknown":
+        return
+    _cache_session_metadata(fields)
+
+
+def _peer_cache_key(fields: Mapping[str, Any]) -> str | None:
+    port = _clean_string(fields.get("client_port"), max_length=16)
+    if not port:
+        return None
+    host = _clean_string(fields.get("client_host"), max_length=64)
+    forwarded_for = _clean_string(fields.get("http_x_forwarded_for"), max_length=128)
+    if not host and not forwarded_for:
+        return None
+    return f"{forwarded_for or '-'}|{host or '-'}|{port}"
+
+
+def _cached_peer_metadata(fields: Mapping[str, Any]) -> dict[str, Any]:
+    key = _peer_cache_key(fields)
+    if not key:
+        return {}
+    with _session_metadata_lock:
+        return dict(_peer_metadata.get(key, {}))
+
+
+def _cache_peer_metadata(fields: Mapping[str, Any]) -> None:
+    if _normalize_client_name(fields.get("mcp.client.name")) == "unknown":
+        return
+    key = _peer_cache_key(fields)
+    if not key:
+        return
+    cached = {k: v for k, v in fields.items() if k in _PEER_CACHE_FIELDS}
+    if not cached:
+        return
+    with _session_metadata_lock:
+        if len(_peer_metadata) >= _PEER_METADATA_CACHE_LIMIT:
+            _peer_metadata.clear()
+        _peer_metadata[key] = cached
+
+
+def _has_client_identity_signal(fields: Mapping[str, Any]) -> bool:
+    if any(
+        fields.get(key)
+        for key in (
+            "mcp.client.name.raw",
+            "http.originator",
+            "user_agent.original",
+            "mcp.meta.agent",
+        )
+    ):
+        return True
+    return _normalize_client_name(fields.get("mcp.client.name")) != "unknown"
+
+
+def _apply_cached_peer_metadata(fields: dict[str, Any]) -> None:
+    if _has_client_identity_signal(fields):
+        return
+    for key, value in _cached_peer_metadata(fields).items():
+        fields.setdefault(key, value)
+
+
 def _resolve_client_fields(fields: dict[str, Any]) -> None:
     source = "unknown"
     raw_client = None
@@ -693,7 +775,11 @@ def metadata_envelope(
     if error is not None:
         fields.update(_error_fields(error))
 
+    if initialize_message is None:
+        _apply_cached_peer_metadata(fields)
     _resolve_client_fields(fields)
+    if initialize_message is None:
+        _cache_identified_session_metadata(fields)
     return fields
 
 
@@ -704,6 +790,7 @@ def cache_initialize_metadata(context: Any) -> dict[str, Any]:
         initialize_message=_safe_attr(context, "message"),
     )
     _cache_session_metadata(fields)
+    _cache_peer_metadata(fields)
     return fields
 
 

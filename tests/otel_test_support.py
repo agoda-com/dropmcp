@@ -12,6 +12,7 @@ def _reset_telemetry_state() -> None:
     telemetry._state["active"] = False
     telemetry._state["instruments"] = None
     telemetry._session_metadata.clear()
+    telemetry._peer_metadata.clear()
     telemetry._event_logging_configured = False
     telemetry._event_logger.handlers.clear()
 
