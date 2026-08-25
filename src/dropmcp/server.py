@@ -42,9 +42,6 @@ from dropmcp.subscriptions import (
 )
 from dropmcp.telemetry import configure
 
-SUPPORTING_FILES = "resources"
-
-
 def _package_static_dir() -> Path:
     return Path(resources.files("dropmcp") / "static")
 
@@ -205,7 +202,6 @@ def build_server(settings: Settings) -> FastMCP:
     mcp.add_provider(
         FilteredSkillsProvider(
             roots=settings.skills_dir,
-            supporting_files=SUPPORTING_FILES,
             reload=settings.reload,
             subscription_store=subscription_store,
             subscription_settings=settings,

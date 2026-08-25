@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING, Any
 
 import yaml
 from fastmcp.resources.base import Resource
+from fastmcp.resources.template import ResourceTemplate
 from fastmcp.server.providers.skills import SkillsDirectoryProvider
 from fastmcp.server.providers.skills._common import SkillInfo
 from fastmcp.server.providers.skills.skill_provider import SkillProvider
@@ -34,6 +35,8 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 _FRONTMATTER_RE = re.compile(r"^---\s*\n(.*?)\n---\s*\n", re.DOTALL)
+
+_SKILL_URI_PREFIX = "skill://"
 
 
 class SkillTool(Tool):
@@ -123,6 +126,13 @@ def _frontmatter_group(info: SkillInfo) -> str | None:
         return None
 
 
+def _skill_name_from_uri(uri: str) -> str | None:
+    """Pull the skill name out of a `skill://<name>/<rest>` URI or template."""
+    if not uri.startswith(_SKILL_URI_PREFIX):
+        return None
+    return uri[len(_SKILL_URI_PREFIX) :].split("/", 1)[0] or None
+
+
 def _build_skill_tool(info: SkillInfo) -> SkillTool:
     return SkillTool(
         name=info.name,
@@ -174,11 +184,52 @@ class TrackedResource(Resource):
             return await self._inner._read(task_meta=task_meta)
 
 
+class TrackedResourceTemplate(ResourceTemplate):
+    """`TrackedResource` for templates, so templated reads stay measurable.
+
+    Supporting files are reached through a template rather than an
+    enumerated resource, so without this every supporting-file read would
+    be invisible to telemetry. We track the concrete URI passed to
+    `_read` rather than the template pattern, which is what identifies
+    the file that was actually read.
+    """
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    track_kind: str = "resource"
+
+    _inner: ResourceTemplate = PrivateAttr()
+
+    @classmethod
+    def wrap(
+        cls, inner: ResourceTemplate, *, track_kind: str = "resource"
+    ) -> "TrackedResourceTemplate":
+        wrapper = cls(
+            uri_template=inner.uri_template,
+            name=inner.name,
+            description=inner.description,
+            mime_type=inner.mime_type,
+            parameters=inner.parameters,
+            track_kind=track_kind,
+        )
+        wrapper._inner = inner
+        return wrapper
+
+    async def read(self, arguments):
+        return await self._inner.read(arguments)
+
+    async def create_resource(self, uri, params):
+        return await self._inner.create_resource(uri, params)
+
+    async def _read(self, uri, params, task_meta=None):
+        with track("resource", str(uri), resource_kind=self.track_kind):
+            return await self._inner._read(uri, params, task_meta=task_meta)
+
+
 class FilteredSkillsProvider(SkillsDirectoryProvider):
     """Hide implementation-detail entries from MCP `list_resources`.
 
-    With `supporting_files="resources"`, the base provider exposes three
-    URI shapes per skill:
+    The base provider exposes three URI shapes per skill:
 
       * `skill://<name>/SKILL.md`     — main instruction file
       * `skill://<name>/_manifest`    — auto-generated JSON file listing
@@ -191,6 +242,18 @@ class FilteredSkillsProvider(SkillsDirectoryProvider):
     FastMCP plumbing, so we hide them from discovery. They stay readable
     by URI, which keeps `ResourceLink` resolution working.
 
+    Supporting files use FastMCP's default `supporting_files="template"`
+    rather than `"resources"`. Under `"resources"` every supporting file
+    is enumerated in `list_resources` up front, which costs the client a
+    fixed slice of context on every session for files most skills never
+    need: one production catalogue paid ~6k tokens for 77 entries,
+    individual `package.json` and `tsconfig.json` files inside project
+    scaffolds among them. Under `"template"` each skill advertises one
+    `skill://<name>/{path*}` template instead, so the URIs stay
+    resolvable — which is what `ResourceLink` needs — and the agent
+    learns the concrete file list from the tool result or `_manifest`
+    once it actually calls the skill.
+
     `catalog/` files are SPA assets served via HTTP; they are never part
     of the agent-facing skill surface.
     """
@@ -201,7 +264,7 @@ class FilteredSkillsProvider(SkillsDirectoryProvider):
         self,
         roots,
         *,
-        supporting_files: str = "resources",
+        supporting_files: str = "template",
         reload: bool = False,
         subscription_store: UserSubscriptionStore | None = None,
         subscription_settings: Settings | None = None,
@@ -243,6 +306,36 @@ class FilteredSkillsProvider(SkillsDirectoryProvider):
         if resource is None:
             return None
         return TrackedResource.wrap(resource, track_name=str(uri), track_kind="skill")
+
+    async def _list_resource_templates(self):
+        templates = await super()._list_resource_templates()
+        return [
+            t
+            for t in templates
+            if self._template_skill_visible(str(t.uri_template))
+        ]
+
+    async def _get_resource_template(self, uri: str, version=None):
+        if not self._template_skill_visible(uri):
+            return None
+        template = await super()._get_resource_template(uri, version)
+        if template is None:
+            return None
+        return TrackedResourceTemplate.wrap(template, track_kind="skill")
+
+    def _template_skill_visible(self, uri: str) -> bool:
+        """Whether the skill a `skill://<name>/...` URI belongs to is visible.
+
+        Without this, an unsubscribed skill still advertises its file
+        template, which leaks both its name and read access to its files.
+        """
+        name = _skill_name_from_uri(uri)
+        if name is None:
+            return True
+        for p in self.providers:
+            if isinstance(p, SkillProvider) and p.skill_info.name == name:
+                return self._skill_visible(name, p.skill_info)
+        return True
 
     @classmethod
     def _is_visible(cls, uri: str) -> bool:

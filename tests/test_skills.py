@@ -190,6 +190,106 @@ async def test_list_tools_skips_bad_skill_without_crashing(tmp_path):
 
 
 # ---------------------------------------------------------------------------
+# Supporting files reach the client via a template, not an enumerated listing
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_supporting_files_are_not_enumerated_in_list_resources(tmp_path):
+    """Enumerating every supporting file costs the client context every session."""
+    skill_dir = _write_skill(tmp_path, "s", "name: s\ncategory: c\ndescription: d\n")
+    (skill_dir / "resources").mkdir()
+    (skill_dir / "resources" / "reference.md").write_text("ref", encoding="utf-8")
+    (skill_dir / "resources" / "helper.py").write_text("pass", encoding="utf-8")
+
+    provider = FilteredSkillsProvider(roots=tmp_path)
+    resources = await provider._list_resources()
+
+    assert [str(r.uri) for r in resources] == []
+
+
+@pytest.mark.asyncio
+async def test_each_skill_advertises_one_file_template(tmp_path):
+    _write_skill(tmp_path, "alpha", "name: alpha\ncategory: c\ndescription: d\n")
+    _write_skill(tmp_path, "beta", "name: beta\ncategory: c\ndescription: d\n")
+
+    provider = FilteredSkillsProvider(roots=tmp_path)
+    templates = await provider._list_resource_templates()
+
+    assert {str(t.uri_template) for t in templates} == {
+        "skill://alpha/{path*}",
+        "skill://beta/{path*}",
+    }
+
+
+@pytest.mark.asyncio
+async def test_supporting_file_still_readable_through_template(tmp_path):
+    """This is what `ResourceLink`s in the tool result depend on."""
+    skill_dir = _write_skill(tmp_path, "s", "name: s\ncategory: c\ndescription: d\n")
+    (skill_dir / "resources").mkdir()
+    (skill_dir / "resources" / "reference.md").write_text(
+        "# Reference body", encoding="utf-8"
+    )
+
+    provider = FilteredSkillsProvider(roots=tmp_path)
+    uri = "skill://s/resources/reference.md"
+    template = await provider._get_resource_template(uri)
+
+    assert template is not None
+    result = await template.read({"path": "resources/reference.md"})
+    assert "Reference body" in str(result)
+
+
+@pytest.mark.asyncio
+async def test_template_read_is_tracked(tmp_path):
+    """Templated reads must stay measurable now that they replace resources."""
+    skill_dir = _write_skill(tmp_path, "s", "name: s\ncategory: c\ndescription: d\n")
+    (skill_dir / "note.md").write_text("note", encoding="utf-8")
+
+    provider = FilteredSkillsProvider(roots=tmp_path)
+    template = await provider._get_resource_template("skill://s/note.md")
+
+    from dropmcp.skills import TrackedResourceTemplate
+
+    assert isinstance(template, TrackedResourceTemplate)
+
+
+@pytest.mark.asyncio
+async def test_unsubscribed_skill_does_not_advertise_its_template(tmp_path, monkeypatch):
+    """An unsubscribed skill's template would leak its name and its files."""
+    from dropmcp.config import Settings
+    from dropmcp.subscriptions import UserSubscriptionStore
+
+    skills = tmp_path / "skills"
+    skills.mkdir()
+    for name in ("visible", "hidden"):
+        _write_skill(skills, name, f"name: {name}\ncategory: c\ndescription: {name}\n")
+
+    settings = Settings.resolve(
+        skills=skills,
+        prompts=tmp_path / "prompts",
+        user_subscriptions_enabled=True,
+        database_url=f"sqlite:///{tmp_path / 'db'}",
+    )
+    store = UserSubscriptionStore(settings.database_url)
+    provider = FilteredSkillsProvider(
+        roots=skills,
+        subscription_store=store,
+        subscription_settings=settings,
+    )
+    monkeypatch.setattr(
+        "dropmcp.skills.resolve_mcp_user", lambda _settings: "dev@example.com"
+    )
+    store.add_item("dev@example.com", "skill", "visible")
+
+    templates = await provider._list_resource_templates()
+    assert {str(t.uri_template) for t in templates} == {"skill://visible/{path*}"}
+
+    assert await provider._get_resource_template("skill://hidden/note.md") is None
+    assert await provider._get_resource_template("skill://visible/note.md") is not None
+
+
+# ---------------------------------------------------------------------------
 # SkillTool.run — returns content + resource links
 # ---------------------------------------------------------------------------
 
