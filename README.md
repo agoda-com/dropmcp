@@ -149,8 +149,10 @@ default).
 | `user_header` | `DROPMCP_USER_HEADER` | `X-User-Email` | HTTP header carrying the trusted caller identity |
 | `reload` | `DROPMCP_RELOAD` | `false` | re-scan skills/prompts on every request |
 | `database_url` | `DROPMCP_DATABASE_URL` | `sqlite:///<cwd>/dropmcp.db` | feedback database tables (SQLite file or Postgres URL) |
-| `eval_results_project` | `DROPMCP_EVAL_RESULTS_PROJECT` | – | GitLab project path for E2E eval results (enables `/api/telemetry` when a store is available) |
+| `eval_results_project` | `DROPMCP_EVAL_RESULTS_PROJECT` | – | project path for E2E eval results (enables `/api/telemetry` when a store is available) |
 | `eval_results_commit_sha` | `DROPMCP_EVAL_RESULTS_COMMIT_SHA` | `COMMIT_SHA` file | deployed commit to filter eval results |
+| – | `DROPMCP_EVAL_RESULTS_SKILL_QUERY` | – | SQL for one skill; required for the built-in StarRocks store |
+| – | `DROPMCP_EVAL_RESULTS_ALL_QUERY` | – | SQL for every skill; required for the built-in StarRocks store |
 | `catalog_defaults` | `DROPMCP_CATALOG_DEFAULTS` | bundled SVGs | category thumbnail fallbacks for the catalog grid |
 
 If an `INSTRUCTIONS.md` sits next to your content folders it is picked up
@@ -406,17 +408,29 @@ Eval results are **pluggable** — dropmcp ships the UI and HTTP routes, but the
 data source is optional so the library stays deployment-agnostic:
 
 - Pass an `eval_results_store` to `create_server()` (any object implementing
-  `get_results_for_skill` / `get_all_latest_results`), **or**
-- Set `DROPMCP_EVAL_RESULTS_PROJECT` and install the StarRocks extra:
+  `get_results_for_skill` / `get_all_latest_results`). Use this when the
+  deployment owns the query, **or**
+- Install the StarRocks extra and inject both queries. The skill query is
+  bound as `(project, skill_name, commit_sha, datadate)`; the all-results
+  query is bound as `(project, commit_sha, datadate)`. Rows must match
+  `EvalResult` column order. Host, port, database, and credentials come from
+  `STARROCKS_HOST`, `STARROCKS_PORT`, `STARROCKS_SCHEMA`, `STARROCKS_USER`,
+  and `STARROCKS_PASSWORD` (no defaults):
 
   ```bash
   pip install "dropmcp[starrocks]"
-  export DROPMCP_EVAL_RESULTS_PROJECT="full-stack/agents/skills-mcp"
+  export DROPMCP_EVAL_RESULTS_PROJECT="group/project"
   export DROPMCP_EVAL_RESULTS_COMMIT_SHA="$(cat COMMIT_SHA)"
+  export DROPMCP_EVAL_RESULTS_SKILL_QUERY="SELECT ... WHERE project = %s AND testname LIKE CONCAT(%s, '/%') AND commitsha = %s AND datadate >= %s"
+  export DROPMCP_EVAL_RESULTS_ALL_QUERY="SELECT ... WHERE project = %s AND commitsha = %s AND datadate >= %s"
+  export STARROCKS_HOST="starrocks.example.com"
+  export STARROCKS_PORT="9030"
+  export STARROCKS_SCHEMA="your_database"
   ```
 
 When no store is configured the panel renders an empty state; routes are not
-registered. This keeps StarRocks / Fleet JWT coupling out of the base package.
+registered. Setting only `DROPMCP_EVAL_RESULTS_PROJECT` does not open a
+connection.
 
 ## Skill and prompt format
 
