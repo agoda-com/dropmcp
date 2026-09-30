@@ -1,10 +1,10 @@
-"""StarRocks-backed eval results store (optional ``dropmcp[starrocks]`` extra).
+"""MySQL-backed eval results store (optional ``dropmcp[mysql]`` extra).
 
 The library does not ship a deployment's SQL or connection defaults. Pass the
 queries in, or set ``DROPMCP_EVAL_RESULTS_SKILL_QUERY`` and
 ``DROPMCP_EVAL_RESULTS_ALL_QUERY``. Connection settings come from the
-constructor or ``STARROCKS_HOST``, ``STARROCKS_PORT``, ``STARROCKS_SCHEMA``,
-``STARROCKS_USER``, and ``STARROCKS_PASSWORD``.
+constructor or ``MYSQL_HOST``, ``MYSQL_PORT``, ``MYSQL_DATABASE``,
+``MYSQL_USER``, and ``MYSQL_PASSWORD``.
 """
 
 from __future__ import annotations
@@ -27,7 +27,7 @@ Connect = Callable[..., object]
 
 
 def _env_credentials() -> tuple[str, str]:
-    return os.environ.get("STARROCKS_USER", ""), os.environ.get("STARROCKS_PASSWORD", "")
+    return os.environ.get("MYSQL_USER", ""), os.environ.get("MYSQL_PASSWORD", "")
 
 
 def _datadate_cutoff(days: int) -> str:
@@ -56,8 +56,8 @@ def _default_connect(**kwargs):
     return mysql.connector.connect(**kwargs)
 
 
-class StarRocksEvalResultsStore:
-    """Run caller-supplied SQL against a MySQL-compatible StarRocks endpoint.
+class MySQLEvalResultsStore:
+    """Run caller-supplied SQL against MySQL.
 
     ``skill_query`` is executed as
     ``(project, skill_name, commit_sha, datadate)``. ``all_query`` is executed
@@ -80,15 +80,15 @@ class StarRocksEvalResultsStore:
         skill_query = skill_query.strip()
         all_query = all_query.strip()
         if not skill_query or not all_query:
-            raise ValueError("StarRocks eval queries must be provided by the caller")
+            raise ValueError("MySQL eval queries must be provided by the caller")
 
         self._skill_query = skill_query
         self._all_query = all_query
-        self._host = host if host is not None else os.environ.get("STARROCKS_HOST", "")
-        port_raw = port if port is not None else os.environ.get("STARROCKS_PORT")
+        self._host = host if host is not None else os.environ.get("MYSQL_HOST", "")
+        port_raw = port if port is not None else os.environ.get("MYSQL_PORT")
         self._port = int(port_raw) if port_raw else None
         self._database = (
-            database if database is not None else os.environ.get("STARROCKS_SCHEMA", "")
+            database if database is not None else os.environ.get("MYSQL_DATABASE", "")
         )
         self._credentials = credentials or _env_credentials
         self._connect = connect or _default_connect
@@ -111,7 +111,7 @@ class StarRocksEvalResultsStore:
 
     def _fetch(self, sql: str, params: tuple) -> list[EvalResult]:
         if not self._host or self._port is None:
-            logger.warning("StarRocks eval store is missing STARROCKS_HOST or STARROCKS_PORT")
+            logger.warning("MySQL eval store is missing MYSQL_HOST or MYSQL_PORT")
             return []
 
         username, password = self._credentials()
@@ -133,5 +133,5 @@ class StarRocksEvalResultsStore:
             cursor.close()
             conn.close()
         except Exception as exc:
-            logger.warning("Failed to query StarRocks for eval results: %s", exc)
+            logger.warning("Failed to query MySQL for eval results: %s", exc)
         return results

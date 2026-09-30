@@ -1,7 +1,7 @@
 """Pluggable E2E eval-results store for the catalog telemetry panel.
 
 dropmcp is a generic library. Pass an ``EvalResultsStore`` to
-``create_server()``, or install the optional ``starrocks`` extra and supply
+``create_server()``, or install the optional ``mysql`` extra and supply
 your own SQL via ``DROPMCP_EVAL_RESULTS_SKILL_QUERY`` and
 ``DROPMCP_EVAL_RESULTS_ALL_QUERY``. ``DROPMCP_EVAL_RESULTS_PROJECT`` only
 enables ``/api/telemetry`` once a store is available.
@@ -105,8 +105,8 @@ class InMemoryEvalResultsStore:
         return out
 
 
-def resolve_starrocks_store() -> EvalResultsStore | None:
-    """Return a StarRocks store when the extra is installed and SQL is configured.
+def resolve_mysql_store() -> EvalResultsStore | None:
+    """Return a MySQL store when the extra is installed and SQL is configured.
 
     Queries are deployment-specific. With either query unset, this returns
     ``None`` instead of connecting.
@@ -123,6 +123,6 @@ def resolve_starrocks_store() -> EvalResultsStore | None:
     except ImportError:
         return None
 
-    from dropmcp.eval_results_starrocks import StarRocksEvalResultsStore
+    from dropmcp.eval_results_mysql import MySQLEvalResultsStore
 
-    return StarRocksEvalResultsStore(skill_query=skill_query, all_query=all_query)
+    return MySQLEvalResultsStore(skill_query=skill_query, all_query=all_query)
