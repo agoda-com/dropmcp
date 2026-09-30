@@ -1,9 +1,10 @@
 """Pluggable E2E eval-results store for the catalog telemetry panel.
 
-dropmcp is a generic library — StarRocks and other deployment-specific backends
-live behind ``EvalResultsStore``. Pass a store to ``create_server()`` or set
-``DROPMCP_EVAL_RESULTS_PROJECT`` (with the optional ``starrocks`` extra) to
-enable the ``/api/telemetry`` routes automatically.
+dropmcp is a generic library. Pass an ``EvalResultsStore`` to
+``create_server()``, or install the optional ``starrocks`` extra and supply
+your own SQL via ``DROPMCP_EVAL_RESULTS_SKILL_QUERY`` and
+``DROPMCP_EVAL_RESULTS_ALL_QUERY``. ``DROPMCP_EVAL_RESULTS_PROJECT`` only
+enables ``/api/telemetry`` once a store is available.
 """
 
 from __future__ import annotations
@@ -105,9 +106,23 @@ class InMemoryEvalResultsStore:
 
 
 def resolve_starrocks_store() -> EvalResultsStore | None:
-    """Return a StarRocks-backed store when the optional extra is installed."""
+    """Return a StarRocks store when the extra is installed and SQL is configured.
+
+    Queries are deployment-specific. With either query unset, this returns
+    ``None`` instead of connecting.
+    """
+    import os
+
+    skill_query = os.environ.get("DROPMCP_EVAL_RESULTS_SKILL_QUERY", "").strip()
+    all_query = os.environ.get("DROPMCP_EVAL_RESULTS_ALL_QUERY", "").strip()
+    if not skill_query or not all_query:
+        return None
+
     try:
-        from dropmcp.eval_results_starrocks import StarRocksEvalResultsStore
+        import mysql.connector  # noqa: F401
     except ImportError:
         return None
-    return StarRocksEvalResultsStore()
+
+    from dropmcp.eval_results_starrocks import StarRocksEvalResultsStore
+
+    return StarRocksEvalResultsStore(skill_query=skill_query, all_query=all_query)
