@@ -6,6 +6,7 @@ import CatalogPage from './pages/CatalogPage';
 import DetailPage from './pages/DetailPage';
 import FeedbackPage from './pages/FeedbackPage';
 import RepoFeedbackPage from './pages/RepoFeedbackPage';
+import BenchmarksPage from './pages/BenchmarksPage';
 
 export default function App() {
   return (
@@ -16,6 +17,7 @@ export default function App() {
           <Route path="/" element={<CatalogPage />} />
           <Route path="/feedback" element={<FeedbackPage />} />
           <Route path="/repo-feedback" element={<RepoFeedbackPage />} />
+          <Route path="/benchmarks" element={<BenchmarksPage />} />
           <Route path="/:type/:name" element={<DetailPage />} />
         </Routes>
         <Footer />

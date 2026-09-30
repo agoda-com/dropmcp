@@ -4,11 +4,15 @@ import type { ReactNode } from 'react';
 import styles from './Header.module.css';
 
 export default function Header() {
-  const { server, feedbackEnabled, repoFeedbackEnabled } = useCatalog();
+  const { server, feedbackEnabled, repoFeedbackEnabled, benchmarksEnabled, me } =
+    useCatalog();
   const links = [
     feedbackEnabled ? <Link key="feedback" to="/feedback">Feedback</Link> : null,
     repoFeedbackEnabled
       ? <Link key="repo-feedback" to="/repo-feedback">Repo feedback</Link>
+      : null,
+    benchmarksEnabled && me.authenticated
+      ? <Link key="benchmarks" to="/benchmarks">Benchmarks</Link>
       : null,
   ].filter(Boolean);
 

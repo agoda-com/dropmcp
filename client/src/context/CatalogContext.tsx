@@ -21,6 +21,7 @@ interface CatalogState {
   subscriptionsEnabled: boolean;
   feedbackEnabled: boolean;
   repoFeedbackEnabled: boolean;
+  benchmarksEnabled: boolean;
   user: string | null;
   me: CurrentUserIdentity;
   subscriptionControlsEnabled: boolean;
@@ -56,6 +57,7 @@ const CatalogContext = createContext<CatalogState>({
   subscriptionsEnabled: false,
   feedbackEnabled: false,
   repoFeedbackEnabled: false,
+  benchmarksEnabled: false,
   user: null,
   me: anonymousUser,
   subscriptionControlsEnabled: false,
@@ -72,6 +74,7 @@ export function CatalogProvider({ children }: { children: ReactNode }) {
   const [subscriptionsEnabled, setSubscriptionsEnabled] = useState(false);
   const [feedbackEnabled, setFeedbackEnabled] = useState(false);
   const [repoFeedbackEnabled, setRepoFeedbackEnabled] = useState(false);
+  const [benchmarksEnabled, setBenchmarksEnabled] = useState(false);
   const [user, setUser] = useState<string | null>(null);
   const [me, setMe] = useState<CurrentUserIdentity>(anonymousUser);
   const [subscribedGroups, setSubscribedGroups] = useState<string[]>([]);
@@ -84,6 +87,7 @@ export function CatalogProvider({ children }: { children: ReactNode }) {
         setSubscriptionsEnabled(data.subscriptionsEnabled);
         setFeedbackEnabled(data.feedbackEnabled);
         setRepoFeedbackEnabled(data.repoFeedbackEnabled);
+        setBenchmarksEnabled(data.benchmarksEnabled);
         setUser(data.user);
         setMe(data.me);
         setSubscribedGroups(data.subscribedGroups);
@@ -159,6 +163,7 @@ export function CatalogProvider({ children }: { children: ReactNode }) {
         subscriptionsEnabled,
         feedbackEnabled,
         repoFeedbackEnabled,
+        benchmarksEnabled,
         user,
         me,
         subscriptionControlsEnabled,

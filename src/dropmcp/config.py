@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from dropmcp.benchmarks import BenchmarkResultsStore
     from dropmcp.eval_results import EvalResultsStore
 
 _TRUE = {"1", "true", "yes", "on"}
@@ -173,6 +174,8 @@ class Settings:
     eval_results_project: str | None
     eval_results_commit_sha: str | None
     eval_results_store: EvalResultsStore | None
+    benchmarks_enabled: bool
+    benchmark_results_store: BenchmarkResultsStore | None
 
     @classmethod
     def resolve(
@@ -197,6 +200,8 @@ class Settings:
         eval_results_project: str | None = None,
         eval_results_commit_sha: str | None = None,
         eval_results_store: EvalResultsStore | None = None,
+        benchmarks_enabled: bool | None = None,
+        benchmark_results_store: BenchmarkResultsStore | None = None,
     ) -> "Settings":
         skills_dir = Path(
             _first(skills, _env("DROPMCP_SKILLS"), DEFAULT_SKILLS_DIR)
@@ -248,4 +253,8 @@ class Settings:
                 eval_results_commit_sha, skills_dir
             ),
             eval_results_store=eval_results_store,
+            benchmarks_enabled=_first(
+                benchmarks_enabled, _env_bool("DROPMCP_BENCHMARKS"), False
+            ),
+            benchmark_results_store=benchmark_results_store,
         )

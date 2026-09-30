@@ -31,6 +31,8 @@ skills/prompts MCP servers, extracted as a standalone library.
   agents get corrected.
 - **Repository feedback backlog** — an optional `record_repo_feedback` tool and
   triage UI for flaky tests, CI-only checks, setup gaps, and other repo friction.
+- **Benchmarks page** — an optional models × skills matrix of the latest E2E
+  eval results, shown only to identified users.
 - **Per-user subscriptions** — optional opt-in so each user's agent sees only a
   curated subset of the catalog.
 
@@ -153,6 +155,8 @@ default).
 | `eval_results_commit_sha` | `DROPMCP_EVAL_RESULTS_COMMIT_SHA` | `COMMIT_SHA` file | deployed commit to filter eval results |
 | – | `DROPMCP_EVAL_RESULTS_SKILL_QUERY` | – | SQL for one skill; required for the built-in MySQL store |
 | – | `DROPMCP_EVAL_RESULTS_ALL_QUERY` | – | SQL for every skill; required for the built-in MySQL store |
+| `benchmarks_enabled` | `DROPMCP_BENCHMARKS` | `false` | serve the `/benchmarks` page and `/api/benchmarks` (needs `eval_results_project` and `benchmark_results_store`) |
+| `benchmark_results_store` | – | – | object implementing `get_latest_benchmark_results(project, lookback_days)`; required when benchmarks are enabled |
 | `catalog_defaults` | `DROPMCP_CATALOG_DEFAULTS` | bundled SVGs | category thumbnail fallbacks for the catalog grid |
 
 If an `INSTRUCTIONS.md` sits next to your content folders it is picked up
@@ -431,6 +435,60 @@ data source is optional so the library stays deployment-agnostic:
 When no store is configured the panel renders an empty state; routes are not
 registered. Setting only `DROPMCP_EVAL_RESULTS_PROJECT` does not open a
 connection.
+
+## Benchmarks page
+
+Set `DROPMCP_BENCHMARKS=true` to add a **Benchmarks** page: a models × skills
+matrix of the latest E2E result per test and model on `main` over the last 60
+days, with a per-test breakdown for each skill.
+
+- An **Overall** row gives each model's average score across every test it ran,
+  its pass count, and how many tests it covered. An **All models** column gives
+  each skill's average across models.
+- **Latest** shows the newest result. **60-day average** shows the mean of every
+  run in the window and colours a cell by whether that average meets the
+  threshold. In the latest view, ▲/▼ mark how far the newest result sits from
+  the window average, and expanded tests show a trend line of recent scores.
+- Columns are ranked by the selected average. **Compact** drops the detail
+  lines, and a model picker (with an "All" and "Top 5" preset) hides columns for
+  wide comparisons. The view lives in the URL (`metric=history`,
+  `sort=name`, `compact=1`, `models=a,b`) so it can be shared. Overall figures
+  always cover every model, whichever columns are shown.
+- It reports the project in `DROPMCP_EVAL_RESULTS_PROJECT` only; the API takes
+  no project parameter.
+- The data source is always supplied by the deployment: pass an object with
+  `get_latest_benchmark_results(project, lookback_days)` as
+  `benchmark_results_store`. Enabling the page without a project or a valid
+  store fails at startup. No query, host or credential defaults ship in the
+  library.
+- With the `mysql` extra, `MySQLBenchmarkResultsStore` runs your SQL. The query
+  is bound as `(project, datadate)` and must return columns in
+  `BenchmarkResult` order: `test_name`, `worker_model`, `passed`, `score`,
+  `threshold`, `triggered_at`, `pipeline_id`, `commit_sha`. Host, port, database
+  and credentials come from the constructor or `MYSQL_*`. The `datadate` bound
+  parameter is formatted with `datadate_format` (default `%Y-%m-%d`), so match
+  it to your partition key. Query failures surface as an "unavailable" banner
+  rather than an empty page.
+
+  ```python
+  from dropmcp.eval_results_mysql import MySQLBenchmarkResultsStore
+
+  dropmcp.create_server(
+      eval_results_project="group/project",
+      benchmarks_enabled=True,
+      benchmark_results_store=MySQLBenchmarkResultsStore(
+          query="SELECT ... WHERE project = %s AND datadate >= %s",
+          datadate_format="%Y%m%d",
+      ),
+  )
+  ```
+- `/api/benchmarks` answers `401` without the identity header
+  (`DROPMCP_USER_HEADER`), and the header link only appears for identified
+  users. dropmcp trusts that header as sent, so it is a usability gate rather
+  than access control: put an authenticating proxy in front of the server and
+  deny `/benchmarks` and `/api/benchmarks` to everyone else.
+- Responses carry `Cache-Control: no-store`, `X-Content-Type-Options: nosniff`
+  and `Referrer-Policy: no-referrer`, and never include reasoning or error text.
 
 ## Skill and prompt format
 

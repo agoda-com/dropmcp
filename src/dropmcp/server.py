@@ -19,6 +19,10 @@ from mcp.types import Icon
 from starlette.requests import Request
 from starlette.responses import FileResponse, HTMLResponse, JSONResponse
 
+from dropmcp.benchmarks import (
+    BenchmarkResultsStore,
+    BenchmarkService,
+)
 from dropmcp.catalog import CatalogProvider
 from dropmcp.config import Settings
 from dropmcp.eval_results import EvalResultsStore, resolve_mysql_store, result_view_model
@@ -146,6 +150,23 @@ def _resolve_eval_results_store(settings: Settings) -> EvalResultsStore | None:
     return None
 
 
+def _build_benchmark_service(settings: Settings) -> BenchmarkService | None:
+    if not settings.benchmarks_enabled:
+        return None
+    if not settings.eval_results_project:
+        raise ValueError(
+            "Benchmarks need a project: set eval_results_project "
+            "(DROPMCP_EVAL_RESULTS_PROJECT)."
+        )
+    store = settings.benchmark_results_store
+    if not isinstance(store, BenchmarkResultsStore):
+        raise ValueError(
+            "Benchmarks are enabled but benchmark_results_store is missing or "
+            "does not implement get_latest_benchmark_results."
+        )
+    return BenchmarkService(store, settings.eval_results_project)
+
+
 def build_server(settings: Settings) -> FastMCP:
     configure(service_name=settings.name)
 
@@ -234,12 +255,14 @@ def build_server(settings: Settings) -> FastMCP:
 
     if settings.ui_enabled:
         eval_store = _resolve_eval_results_store(settings)
+        benchmark_service = _build_benchmark_service(settings)
         _register_catalog_routes(
             mcp,
             settings,
             feedback_store,
             repo_feedback_store,
             eval_store,
+            benchmark_service,
             subscription_store,
             subscription_coordinator,
         )
@@ -267,6 +290,7 @@ def _register_catalog_routes(
     feedback_store: FeedbackStore | None,
     repo_feedback_store: RepoFeedbackStore | None,
     eval_store: EvalResultsStore | None,
+    benchmark_service: BenchmarkService | None,
     subscription_store: UserSubscriptionStore | None,
     subscription_coordinator: SubscriptionCoordinator | None,
 ) -> None:
@@ -354,6 +378,7 @@ def _register_catalog_routes(
             "available_groups": available_groups,
             "feedback_enabled": settings.feedback_enabled,
             "repo_feedback_enabled": settings.repo_feedback_enabled,
+            "benchmarks_enabled": benchmark_service is not None,
         }
         return JSONResponse(payload)
 
@@ -466,6 +491,11 @@ def _register_catalog_routes(
 
     if eval_store is not None and settings.eval_results_project:
         _register_eval_results_routes(mcp, settings, eval_store)
+
+    if benchmark_service is not None:
+        _register_benchmark_routes(
+            mcp, settings, benchmark_service, subscription_coordinator
+        )
 
     @mcp.custom_route("/", methods=["GET"])
     async def catalog_ui(request: Request) -> HTMLResponse:
@@ -703,6 +733,32 @@ def _register_repo_feedback_routes(mcp: FastMCP, store: RepoFeedbackStore) -> No
         if updated is None:
             return JSONResponse({"error": "not found"}, status_code=404)
         return JSONResponse(repo_feedback_to_dict(updated))
+
+
+_BENCHMARK_HEADERS = {
+    "Cache-Control": "no-store",
+    "X-Content-Type-Options": "nosniff",
+    "Referrer-Policy": "no-referrer",
+}
+
+
+def _benchmark_response(payload: dict, status_code: int = 200) -> JSONResponse:
+    return JSONResponse(payload, status_code=status_code, headers=_BENCHMARK_HEADERS)
+
+
+def _register_benchmark_routes(
+    mcp: FastMCP,
+    settings: Settings,
+    service: BenchmarkService,
+    coordinator: SubscriptionCoordinator | None,
+) -> None:
+    @mcp.custom_route("/api/benchmarks", methods=["GET"])
+    async def benchmarks(request: Request) -> JSONResponse:
+        if _request_user(request, settings, coordinator) is None:
+            return _benchmark_response(
+                {"error": "identity header required"}, status_code=401
+            )
+        return _benchmark_response(await service.payload())
 
 
 def _register_eval_results_routes(

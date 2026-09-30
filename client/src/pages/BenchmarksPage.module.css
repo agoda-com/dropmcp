@@ -1,0 +1,68 @@
+.page {
+  --bench-pass-bg: #e6f4ea;
+  --bench-pass-fg: #1e6b34;
+  --bench-partial-bg: #fff4d6;
+  --bench-partial-fg: #7a4f00;
+  --bench-fail-bg: #fde8e8;
+  --bench-fail-fg: #a4282a;
+  flex: 1;
+  width: 100%;
+  max-width: 1800px;
+  margin: 0 auto;
+  padding: 1.5rem 1.25rem 3rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  .page {
+    --bench-pass-bg: rgba(34, 197, 94, 0.16);
+    --bench-pass-fg: #86efac;
+    --bench-partial-bg: rgba(250, 204, 21, 0.16);
+    --bench-partial-fg: #fde68a;
+    --bench-fail-bg: rgba(239, 68, 68, 0.16);
+    --bench-fail-fg: #fca5a5;
+  }
+}
+
+.banner {
+  margin: 0 0 1rem;
+  padding: 0.6rem 0.9rem;
+  background: var(--bench-partial-bg);
+  color: var(--bench-partial-fg);
+  border-radius: var(--radius-sm);
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin: 0.75rem 0 0;
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+}
+
+.legendPass::before,
+.legendPartial::before,
+.legendFail::before {
+  content: '';
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: 6px;
+  border-radius: 2px;
+  vertical-align: -1px;
+}
+
+.legendPass::before {
+  background: var(--bench-pass-bg);
+  border: 1px solid var(--bench-pass-fg);
+}
+
+.legendPartial::before {
+  background: var(--bench-partial-bg);
+  border: 1px solid var(--bench-partial-fg);
+}
+
+.legendFail::before {
+  background: var(--bench-fail-bg);
+  border: 1px solid var(--bench-fail-fg);
+}

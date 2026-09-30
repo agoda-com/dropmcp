@@ -50,6 +50,8 @@ def create_server(
     eval_results_project: str | None = None,
     eval_results_commit_sha: str | None = None,
     eval_results_store=None,
+    benchmarks_enabled: bool | None = None,
+    benchmark_results_store=None,
 ) -> FastMCP:
     """Build and return a configured `FastMCP` server without running it.
 
@@ -75,6 +77,8 @@ def create_server(
         eval_results_project=eval_results_project,
         eval_results_commit_sha=eval_results_commit_sha,
         eval_results_store=eval_results_store,
+        benchmarks_enabled=benchmarks_enabled,
+        benchmark_results_store=benchmark_results_store,
     )
     return build_server(settings)
 
@@ -98,6 +102,8 @@ def run(
     eval_results_project: str | None = None,
     eval_results_commit_sha: str | None = None,
     eval_results_store=None,
+    benchmarks_enabled: bool | None = None,
+    benchmark_results_store=None,
 ) -> None:
     """Build the server and serve it over streamable-HTTP.
 
@@ -123,6 +129,8 @@ def run(
         eval_results_project=eval_results_project,
         eval_results_commit_sha=eval_results_commit_sha,
         eval_results_store=eval_results_store,
+        benchmarks_enabled=benchmarks_enabled,
+        benchmark_results_store=benchmark_results_store,
     )
     mcp = build_server(settings)
 
