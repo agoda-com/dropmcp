@@ -1,4 +1,4 @@
-"""Caller-supplied StarRocks queries. No deployment SQL or hosts ship in-tree."""
+"""Caller-supplied MySQL queries. No deployment SQL or hosts ship in-tree."""
 
 from __future__ import annotations
 
@@ -6,24 +6,24 @@ from pathlib import Path
 
 import pytest
 
-from dropmcp.eval_results import resolve_starrocks_store
-from dropmcp.eval_results_starrocks import StarRocksEvalResultsStore
+from dropmcp.eval_results import resolve_mysql_store
+from dropmcp.eval_results_mysql import MySQLEvalResultsStore
 
-_MODULE = Path(__file__).resolve().parents[1] / "src" / "dropmcp" / "eval_results_starrocks.py"
+_MODULE = Path(__file__).resolve().parents[1] / "src" / "dropmcp" / "eval_results_mysql.py"
 
 _SKILL_SQL = "SELECT skill WHERE project = %s AND name = %s AND sha = %s AND day >= %s"
 _ALL_SQL = "SELECT all WHERE project = %s AND sha = %s AND day >= %s"
 
 
 def test_module_has_no_deployment_defaults():
-    source = _MODULE.read_text()
-    for marker in ("agodata", "agoda", "SkillEvaluation", "/var/agoda", "fleet"):
+    source = _MODULE.read_text().lower()
+    for marker in ("agodata", "agoda", "skillevaluation", "/var/agoda", "fleet", "starrocks"):
         assert marker not in source
 
 
 def test_store_requires_queries():
     with pytest.raises(ValueError):
-        StarRocksEvalResultsStore(skill_query="  ", all_query=_ALL_SQL)
+        MySQLEvalResultsStore(skill_query="  ", all_query=_ALL_SQL)
 
 
 def test_store_executes_injected_queries():
@@ -60,11 +60,11 @@ def test_store_executes_injected_queries():
         def close(self):
             return None
 
-    store = StarRocksEvalResultsStore(
+    store = MySQLEvalResultsStore(
         skill_query=_SKILL_SQL,
         all_query=_ALL_SQL,
-        host="starrocks.example.com",
-        port=9030,
+        host="mysql.example.com",
+        port=3306,
         database="evals",
         credentials=lambda: ("user", "secret"),
         connect=lambda **kwargs: FakeConn(),
@@ -86,23 +86,23 @@ def test_missing_host_does_not_connect():
     def connect(**kwargs):
         raise AssertionError("should not connect")
 
-    store = StarRocksEvalResultsStore(
+    store = MySQLEvalResultsStore(
         skill_query=_SKILL_SQL,
         all_query=_ALL_SQL,
         host="",
-        port=9030,
+        port=3306,
         connect=connect,
     )
     assert store.get_results_for_skill("p", "s", "sha") == []
 
 
-def test_resolve_starrocks_store_without_queries(monkeypatch):
+def test_resolve_mysql_store_without_queries(monkeypatch):
     monkeypatch.delenv("DROPMCP_EVAL_RESULTS_SKILL_QUERY", raising=False)
     monkeypatch.delenv("DROPMCP_EVAL_RESULTS_ALL_QUERY", raising=False)
-    assert resolve_starrocks_store() is None
+    assert resolve_mysql_store() is None
 
 
-def test_resolve_starrocks_store_uses_env_queries(monkeypatch):
+def test_resolve_mysql_store_uses_env_queries(monkeypatch):
     import sys
     import types
 
@@ -114,8 +114,8 @@ def test_resolve_starrocks_store_uses_env_queries(monkeypatch):
     monkeypatch.setenv("DROPMCP_EVAL_RESULTS_SKILL_QUERY", _SKILL_SQL)
     monkeypatch.setenv("DROPMCP_EVAL_RESULTS_ALL_QUERY", _ALL_SQL)
 
-    store = resolve_starrocks_store()
+    store = resolve_mysql_store()
 
-    assert isinstance(store, StarRocksEvalResultsStore)
+    assert isinstance(store, MySQLEvalResultsStore)
     assert store._skill_query == _SKILL_SQL
     assert store._all_query == _ALL_SQL

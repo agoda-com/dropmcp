@@ -21,7 +21,7 @@ from starlette.responses import FileResponse, HTMLResponse, JSONResponse
 
 from dropmcp.catalog import CatalogProvider
 from dropmcp.config import Settings
-from dropmcp.eval_results import EvalResultsStore, result_view_model, resolve_starrocks_store
+from dropmcp.eval_results import EvalResultsStore, resolve_mysql_store, result_view_model
 from dropmcp.feedback import FeedbackProvider, FeedbackStore, feedback_to_dict
 from dropmcp.identity import user_from_request
 from dropmcp.instructions import build_server_instructions
@@ -142,7 +142,7 @@ def _resolve_eval_results_store(settings: Settings) -> EvalResultsStore | None:
     if settings.eval_results_store is not None:
         return settings.eval_results_store
     if settings.eval_results_project:
-        return resolve_starrocks_store()
+        return resolve_mysql_store()
     return None
 
 

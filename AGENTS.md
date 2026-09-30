@@ -62,6 +62,6 @@ Before pushing: run `ruff check src`, `pytest`, and (if you touched `client/`)
   and `src/dropmcp/__init__.py` (`__version__`) **and** the tag must all match.
 - **Tests must be deterministic** — no retries; fix the root cause.
 - **Only test code in this repo.** Don't write tests for third-party/library behaviour.
-- **Eval results & StarRocks are optional** — keep that coupling behind the
-  `[starrocks]` extra and the pluggable store; don't pull it into the base package.
+- **Eval results and MySQL are optional** — keep that coupling behind the
+  `[mysql]` extra and the pluggable store; don't pull it into the base package.
 - Server is streamable-HTTP only (hosted, multi-client) — there is no local stdio transport.

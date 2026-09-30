@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "dropmcp"
-version = "0.13.0"
+version = "0.14.0"
 description = "Drop a skills/ and prompts/ folder, get a FastMCP server with a browseable catalog UI."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -34,7 +34,7 @@ otel = [
     "opentelemetry-sdk>=1.20.0",
     "opentelemetry-exporter-otlp-proto-http>=1.20.0",
 ]
-starrocks = [
+mysql = [
     "mysql-connector-python>=9.0",
 ]
 dev = [
