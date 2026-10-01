@@ -1,9 +1,8 @@
 import { useState, useMemo } from 'react';
 import { useCatalog } from '../context/CatalogContext';
-import InstallPanel from '../components/InstallPanel';
-import SearchToolbar from '../components/SearchToolbar';
-import CatalogGrid, { SkeletonGrid, EmptyState, ErrorState } from '../components/CatalogGrid';
-import type { CatalogItem } from '../api/catalog';
+import InstallPanel from '../components/catalog/install/InstallPanel';
+import SearchToolbar from '../components/catalog/SearchToolbar';
+import CatalogResults from '../components/catalog/CatalogResults';
 import styles from './CatalogPage.module.css';
 
 export default function CatalogPage() {
@@ -57,39 +56,12 @@ export default function CatalogPage() {
         allItems={items}
       />
 
-      <CatalogContent
+      <CatalogResults
         loading={loading}
         error={error}
         items={items}
         filtered={filtered}
       />
     </main>
-  );
-}
-
-function CatalogContent({
-  loading,
-  error,
-  items,
-  filtered,
-}: {
-  loading: boolean;
-  error: string | null;
-  items: CatalogItem[];
-  filtered: CatalogItem[];
-}) {
-  if (loading) return <SkeletonGrid />;
-  if (error) return <ErrorState message={error} />;
-  if (items.length === 0) return <EmptyCatalog />;
-  if (filtered.length === 0) return <EmptyState />;
-  return <CatalogGrid items={filtered} />;
-}
-
-function EmptyCatalog() {
-  return (
-    <div className={styles.emptyWrap}>
-      <h2>Catalog is empty</h2>
-      <p>No skills or prompts are available yet.</p>
-    </div>
   );
 }

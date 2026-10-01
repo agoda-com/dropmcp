@@ -33,6 +33,8 @@ export const REPO_FEEDBACK_CATEGORIES: RepoFeedbackCategory[] = [
 
 export type RepoFeedbackDetails = Record<string, unknown>;
 
+export type RepoFeedbackSort = 'priority' | 'recent';
+
 export interface RepoFeedbackItem {
   id: string;
   created_at: string;
@@ -62,7 +64,7 @@ export interface RepoFeedbackFilters {
   status?: RepoFeedbackStatus;
   model?: string;
   client?: string;
-  sort?: 'priority' | 'recent';
+  sort?: RepoFeedbackSort;
 }
 
 function buildQuery(filters: RepoFeedbackFilters): string {

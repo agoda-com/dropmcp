@@ -44,6 +44,7 @@ interface CatalogResponse {
   subscriptions_enabled?: boolean;
   feedback_enabled?: boolean;
   repo_feedback_enabled?: boolean;
+  benchmarks_enabled?: boolean;
   user?: string | null;
   subscribed_groups?: string[];
   available_groups?: string[];
@@ -55,6 +56,7 @@ export async function fetchCatalog(): Promise<{
   subscriptionsEnabled: boolean;
   feedbackEnabled: boolean;
   repoFeedbackEnabled: boolean;
+  benchmarksEnabled: boolean;
   user: string | null;
   me: CurrentUserIdentity;
   subscribedGroups: string[];
@@ -70,6 +72,7 @@ export async function fetchCatalog(): Promise<{
     subscriptionsEnabled: Boolean(data.subscriptions_enabled),
     feedbackEnabled: Boolean(data.feedback_enabled),
     repoFeedbackEnabled: Boolean(data.repo_feedback_enabled),
+    benchmarksEnabled: Boolean(data.benchmarks_enabled),
     user: me.email,
     me,
     subscribedGroups: Array.isArray(data.subscribed_groups)

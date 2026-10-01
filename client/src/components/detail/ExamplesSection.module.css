@@ -1,0 +1,10 @@
+.examplesList {
+  margin: 0;
+  padding-left: 1.15rem;
+  color: var(--color-text-muted);
+  font-size: 0.875rem;
+}
+
+.examplesList li {
+  margin-bottom: 0.35rem;
+}

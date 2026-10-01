@@ -4,3 +4,7 @@ export function formatName(kebab: string): string {
     .map((w) => (w.length ? w.charAt(0).toUpperCase() + w.slice(1).toLowerCase() : ''))
     .join(' ');
 }
+
+export function formatLabel(value: string): string {
+  return value.replace(/_/g, ' ');
+}

@@ -1,0 +1,35 @@
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin: 0.75rem 0 0;
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+}
+
+.legendPass::before,
+.legendPartial::before,
+.legendFail::before {
+  content: '';
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: 6px;
+  border-radius: 2px;
+  vertical-align: -1px;
+}
+
+.legendPass::before {
+  background: var(--bench-pass-bg);
+  border: 1px solid var(--bench-pass-fg);
+}
+
+.legendPartial::before {
+  background: var(--bench-partial-bg);
+  border: 1px solid var(--bench-partial-fg);
+}
+
+.legendFail::before {
+  background: var(--bench-fail-bg);
+  border: 1px solid var(--bench-fail-fg);
+}

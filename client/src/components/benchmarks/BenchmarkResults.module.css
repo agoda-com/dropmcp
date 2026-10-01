@@ -1,0 +1,7 @@
+.banner {
+  margin: 0 0 1rem;
+  padding: 0.6rem 0.9rem;
+  background: var(--bench-partial-bg);
+  color: var(--bench-partial-fg);
+  border-radius: var(--radius-sm);
+}

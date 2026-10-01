@@ -1,0 +1,16 @@
+.emptyWrap {
+  text-align: center;
+  padding: 3rem 1rem;
+  color: var(--color-text-muted);
+}
+
+.emptyWrap h2 {
+  margin: 0 0 0.5rem;
+  font-size: 1.125rem;
+  color: var(--color-text);
+}
+
+.emptyWrap p {
+  margin: 0;
+  font-size: 0.9rem;
+}

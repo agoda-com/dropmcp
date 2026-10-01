@@ -12,6 +12,7 @@
     "test:update": "npx playwright test --update-snapshots"
   },
   "dependencies": {
+    "@tanstack/react-query": "^5.104.0",
     "highlight.js": "^11.11.1",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
