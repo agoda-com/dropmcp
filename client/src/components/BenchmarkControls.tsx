@@ -1,10 +1,8 @@
 import type { BenchmarkSummary } from '../api/benchmarks';
-import {
-  TOP_MODEL_COUNT,
-  groupByFamily,
-  orderModels,
-  type BenchmarkView,
-} from '../utils/benchmarks';
+import type { UpdateBenchmarkView } from '../hooks/useBenchmarkView';
+import type { BenchmarkView } from '../utils/benchmarks';
+import BenchmarkModelPicker from './BenchmarkModelPicker';
+import Pill from './Pill';
 import toolbarStyles from './FeedbackToolbar.module.css';
 import styles from './BenchmarkControls.module.css';
 
@@ -14,28 +12,7 @@ interface Props {
   summary: Record<string, BenchmarkSummary>;
   lookbackDays: number;
   view: BenchmarkView;
-  onChange: (patch: Partial<BenchmarkView>) => void;
-}
-
-function Pill({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  children: string;
-}) {
-  return (
-    <button
-      type="button"
-      aria-pressed={active}
-      className={`${toolbarStyles.pill} ${active ? toolbarStyles.pillActive : ''}`}
-      onClick={onClick}
-    >
-      {children}
-    </button>
-  );
+  onChange: UpdateBenchmarkView;
 }
 
 export default function BenchmarkControls({
@@ -46,84 +23,70 @@ export default function BenchmarkControls({
   view,
   onChange,
 }: Props) {
-  const chosen = new Set(shown);
-  const topModels = orderModels(models, summary, view.metric, 'average').slice(
-    0,
-    TOP_MODEL_COUNT,
-  );
-
-  function toggle(model: string) {
-    const next = new Set(chosen);
-    if (next.has(model)) {
-      if (next.size === 1) return;
-      next.delete(model);
-    } else {
-      next.add(model);
-    }
-    onChange({ selected: next.size === models.length ? null : [...next] });
-  }
-
   return (
     <div className={styles.controls}>
-      <div className={toolbarStyles.filterRow}>
-        <span className={toolbarStyles.filterLabel}>Show</span>
-        <Pill active={view.metric === 'latest'} onClick={() => onChange({ metric: 'latest' })}>
-          Latest
-        </Pill>
-        <Pill active={view.metric === 'history'} onClick={() => onChange({ metric: 'history' })}>
-          {`${lookbackDays}-day average`}
-        </Pill>
-      </div>
+      <MetricFilter view={view} lookbackDays={lookbackDays} onChange={onChange} />
 
-      <div className={toolbarStyles.filterRow}>
-        <span className={toolbarStyles.filterLabel}>Sort models</span>
-        <Pill active={view.sort === 'average'} onClick={() => onChange({ sort: 'average' })}>
-          By average
-        </Pill>
-        <Pill active={view.sort === 'name'} onClick={() => onChange({ sort: 'name' })}>
-          By name
-        </Pill>
-      </div>
+      <ModelSortFilter view={view} onChange={onChange} />
 
-      <label className={styles.check}>
-        <input
-          type="checkbox"
-          checked={view.compact}
-          onChange={(event) => onChange({ compact: event.target.checked })}
-        />
-        Compact
-      </label>
+      <CompactToggle view={view} onChange={onChange} />
 
-      <details className={styles.picker}>
-        <summary>{`Models (${shown.length} of ${models.length})`}</summary>
-        <div className={styles.pickerBody}>
-          <div className={styles.family}>
-            <span className={styles.familyName}>Presets</span>
-            <Pill active={shown.length === models.length} onClick={() => onChange({ selected: null })}>
-              All
-            </Pill>
-            <Pill
-              active={
-                shown.length === topModels.length &&
-                topModels.every((model) => chosen.has(model))
-              }
-              onClick={() => onChange({ selected: topModels })}
-            >
-              {`Top ${TOP_MODEL_COUNT}`}
-            </Pill>
-          </div>
-          {groupByFamily(models).map(([family, members]) => (
-            <div key={family} className={styles.family}>
-              <span className={styles.familyName}>{family}</span>
-              {members.map((model) => (
-                <Pill key={model} active={chosen.has(model)} onClick={() => toggle(model)}>
-                  {model}
-                </Pill>
-              ))}
-            </div>
-          ))}
-        </div>
-      </details>
+      <BenchmarkModelPicker
+        models={models}
+        shown={shown}
+        summary={summary}
+        view={view}
+        onChange={onChange}
+      />
     </div>
+  );
+}
+
+function MetricFilter({
+  view,
+  lookbackDays,
+  onChange,
+}: {
+  view: BenchmarkView;
+  lookbackDays: number;
+  onChange: UpdateBenchmarkView;
+}) {
+  return (
+    <div className={toolbarStyles.filterRow}>
+      <span className={toolbarStyles.filterLabel}>Show</span>
+      <Pill active={view.metric === 'latest'} onClick={() => onChange({ metric: 'latest' })}>
+        Latest
+      </Pill>
+      <Pill active={view.metric === 'history'} onClick={() => onChange({ metric: 'history' })}>
+        {`${lookbackDays}-day average`}
+      </Pill>
+    </div>
+  );
+}
+
+function ModelSortFilter({ view, onChange }: { view: BenchmarkView; onChange: UpdateBenchmarkView }) {
+  return (
+    <div className={toolbarStyles.filterRow}>
+      <span className={toolbarStyles.filterLabel}>Sort models</span>
+      <Pill active={view.sort === 'average'} onClick={() => onChange({ sort: 'average' })}>
+        By average
+      </Pill>
+      <Pill active={view.sort === 'name'} onClick={() => onChange({ sort: 'name' })}>
+        By name
+      </Pill>
+    </div>
+  );
+}
+
+function CompactToggle({ view, onChange }: { view: BenchmarkView; onChange: UpdateBenchmarkView }) {
+  return (
+    <label className={styles.check}>
+      <input
+        type="checkbox"
+        checked={view.compact}
+        onChange={(event) => onChange({ compact: event.target.checked })}
+      />
+      Compact
+    </label>
   );
 }

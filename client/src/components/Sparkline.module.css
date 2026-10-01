@@ -1,0 +1,6 @@
+.sparkline {
+  display: inline-block;
+  margin-left: 0.5rem;
+  vertical-align: middle;
+  opacity: 0.8;
+}

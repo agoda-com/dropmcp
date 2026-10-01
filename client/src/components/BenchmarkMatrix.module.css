@@ -158,13 +158,6 @@
   font-variant-numeric: tabular-nums;
 }
 
-.sparkline {
-  display: inline-block;
-  margin-left: 0.5rem;
-  vertical-align: middle;
-  opacity: 0.8;
-}
-
 .compact th,
 .compact td {
   padding: 0.3rem 0.45rem;
