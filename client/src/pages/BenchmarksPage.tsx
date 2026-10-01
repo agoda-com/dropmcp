@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
 import { fetchBenchmarks, type BenchmarksResponse } from '../api/benchmarks';
 import { useCatalog } from '../context/CatalogContext';
@@ -17,9 +17,13 @@ import styles from './BenchmarksPage.module.css';
 
 export default function BenchmarksPage() {
   const { benchmarksEnabled, loading: catalogLoading } = useCatalog();
-  const [data, setData] = useState<BenchmarksResponse | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { data = null, error, isLoading } = useQuery({
+    queryKey: ['benchmarks'],
+    queryFn: fetchBenchmarks,
+    enabled: !catalogLoading && benchmarksEnabled,
+    retry: false,
+    staleTime: 60_000,
+  });
   const [params, setParams] = useSearchParams();
   const view = parseView(params);
 
@@ -30,22 +34,14 @@ export default function BenchmarksPage() {
     );
   }
 
-  useEffect(() => {
-    if (catalogLoading || !benchmarksEnabled) return;
-    fetchBenchmarks()
-      .then(setData)
-      .catch((err: Error) => setError(err.message))
-      .finally(() => setLoading(false));
-  }, [catalogLoading, benchmarksEnabled]);
-
   return (
     <main className={styles.page}>
       <FeedbackHeader title="Benchmarks" description={describe(data)} />
       <PageBody
         catalogLoading={catalogLoading}
         enabled={benchmarksEnabled}
-        loading={loading}
-        error={error}
+        loading={isLoading}
+        error={error?.message ?? null}
         data={data}
         view={view}
         onViewChange={updateView}
