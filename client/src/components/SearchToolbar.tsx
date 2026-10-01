@@ -1,8 +1,7 @@
-import { useCallback, useRef, useEffect } from 'react';
-import { formatName } from '../utils/format';
 import { useCatalog } from '../context/CatalogContext';
+import { formatName } from '../utils/format';
 import type { CatalogItem } from '../api/catalog';
-import { subscribeGroup, unsubscribeGroup } from '../api/subscriptions';
+import GroupSubscriptionFilter from './GroupSubscriptionFilter';
 import styles from './SearchToolbar.module.css';
 
 interface Props {
@@ -32,172 +31,100 @@ export default function SearchToolbar({
   onGroupChange,
   allItems,
 }: Props) {
-  const {
-    subscriptionsEnabled,
-    subscriptionControlsEnabled,
-    subscribedGroups,
-    updateGroupSubscriptions,
-  } = useCatalog();
-
-  const groupMembers = useCallback(
-    (group: string) => allItems.filter((item) => item.group === group),
-    [allItems],
-  );
-
-  const groupState = useCallback(
-    (group: string): 'checked' | 'unchecked' | 'indeterminate' => {
-      if (!subscribedGroups.includes(group)) return 'unchecked';
-      const members = groupMembers(group);
-      if (members.length === 0) return 'checked';
-      const subscribedCount = members.filter((m) => m.subscribed).length;
-      if (subscribedCount === members.length) return 'checked';
-      return 'indeterminate';
-    },
-    [groupMembers, subscribedGroups],
-  );
-
-  const handleGroupCheckbox = async (
-    group: string,
-    nextChecked: boolean,
-  ) => {
-    if (!subscriptionControlsEnabled) return;
-
-    const members = groupMembers(group);
-    updateGroupSubscriptions(group, members, nextChecked);
-    try {
-      if (nextChecked) {
-        await subscribeGroup(group);
-      } else {
-        await unsubscribeGroup(group);
-      }
-    } catch {
-      updateGroupSubscriptions(group, members, !nextChecked);
-    }
-  };
+  const { subscriptionsEnabled } = useCatalog();
 
   return (
     <div className={styles.toolbar}>
-      <div className={styles.searchWrap}>
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-          <circle cx="11" cy="11" r="7" />
-          <path d="M21 21l-4.35-4.35" />
-        </svg>
-        <input
-          type="search"
-          className={styles.searchInput}
-          placeholder="Search by name or description…"
-          autoComplete="off"
-          value={search}
-          onChange={(e) => onSearchChange(e.target.value)}
-        />
-      </div>
-      <div className={styles.filterRow}>
-        <span className={styles.filterLabel}>Type</span>
-        <div className={styles.typeFilters}>
-          {['all', 'skill', 'prompt'].map((t) => (
-            <button
-              key={t}
-              type="button"
-              className={`${styles.pill} ${typeFilter === t ? styles.active : ''}`}
-              onClick={() => onTypeChange(t)}
-            >
-              {t === 'all' ? 'All' : t === 'skill' ? 'Skills' : 'Prompts'}
-            </button>
-          ))}
-        </div>
-      </div>
+      <SearchField value={search} onChange={onSearchChange} />
+      <TypeFilter value={typeFilter} onChange={onTypeChange} />
       {categories.length > 0 && (
-        <div className={styles.filterRow}>
-          <span className={styles.filterLabel}>Category</span>
-          <div className={styles.categories}>
-            {categories.map((cat) => (
-              <button
-                key={cat}
-                type="button"
-                className={`${styles.pill} ${categoryFilter === cat ? styles.active : ''}`}
-                onClick={() => onCategoryChange(categoryFilter === cat ? null : cat)}
-              >
-                {formatName(cat)}
-              </button>
-            ))}
-          </div>
-        </div>
+        <ToggleFilter
+          label="Category"
+          values={categories}
+          selected={categoryFilter}
+          onChange={onCategoryChange}
+        />
       )}
       {groups.length > 0 && (
-        <div className={styles.filterRow}>
-          <span className={styles.filterLabel}>Group</span>
-          <div className={styles.categories}>
-            {groups.map((group) => (
-              <button
-                key={group}
-                type="button"
-                className={`${styles.pill} ${groupFilter === group ? styles.active : ''}`}
-                onClick={() => onGroupChange(groupFilter === group ? null : group)}
-              >
-                {formatName(group)}
-              </button>
-            ))}
-          </div>
-        </div>
+        <ToggleFilter
+          label="Group"
+          values={groups}
+          selected={groupFilter}
+          onChange={onGroupChange}
+        />
       )}
       {subscriptionsEnabled && groups.length > 0 && (
-        <div className={styles.filterRow}>
-          <span className={styles.filterLabel}>Skill groups</span>
-          <div className={styles.categories}>
-            {groups.map((group) => (
-              <GroupSubscriptionPill
-                key={group}
-                group={group}
-                checkboxState={groupState(group)}
-                disabled={!subscriptionControlsEnabled}
-                onCheckboxToggle={(checked) => handleGroupCheckbox(group, checked)}
-              />
-            ))}
-          </div>
-        </div>
+        <GroupSubscriptionFilter groups={groups} allItems={allItems} />
       )}
     </div>
   );
 }
 
-function GroupSubscriptionPill({
-  group,
-  checkboxState,
-  disabled = false,
-  onCheckboxToggle,
-}: {
-  group: string;
-  checkboxState: 'checked' | 'unchecked' | 'indeterminate';
-  disabled?: boolean;
-  onCheckboxToggle: (checked: boolean) => void;
-}) {
-  const checkboxRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    if (checkboxRef.current) {
-      checkboxRef.current.indeterminate = checkboxState === 'indeterminate';
-    }
-  }, [checkboxState]);
-
+function SearchField({ value, onChange }: { value: string; onChange: (value: string) => void }) {
   return (
-    <label
-      className={`${styles.pill} ${styles.groupPill} ${
-        checkboxState !== 'unchecked' ? styles.active : ''
-      } ${disabled ? styles.disabledPill : ''}`}
-      title={disabled ? 'User identity required to change group subscriptions' : undefined}
-    >
+    <div className={styles.searchWrap}>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+        <circle cx="11" cy="11" r="7" />
+        <path d="M21 21l-4.35-4.35" />
+      </svg>
       <input
-        ref={checkboxRef}
-        type="checkbox"
-        className={styles.groupCheckbox}
-        checked={checkboxState === 'checked'}
-        disabled={disabled}
-        aria-label={`Subscribe to all in ${group}`}
-        onChange={() => {
-          if (!disabled) onCheckboxToggle(checkboxState !== 'checked');
-        }}
+        type="search"
+        className={styles.searchInput}
+        placeholder="Search by name or description…"
+        autoComplete="off"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
       />
-      <span>{formatName(group)}</span>
-    </label>
+    </div>
+  );
+}
+
+function TypeFilter({ value, onChange }: { value: string; onChange: (type: string) => void }) {
+  return (
+    <div className={styles.filterRow}>
+      <span className={styles.filterLabel}>Type</span>
+      <div className={styles.typeFilters}>
+        {['all', 'skill', 'prompt'].map((t) => (
+          <button
+            key={t}
+            type="button"
+            className={`${styles.pill} ${value === t ? styles.active : ''}`}
+            onClick={() => onChange(t)}
+          >
+            {t === 'all' ? 'All' : t === 'skill' ? 'Skills' : 'Prompts'}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ToggleFilter({
+  label,
+  values,
+  selected,
+  onChange,
+}: {
+  label: string;
+  values: string[];
+  selected: string | null;
+  onChange: (value: string | null) => void;
+}) {
+  return (
+    <div className={styles.filterRow}>
+      <span className={styles.filterLabel}>{label}</span>
+      <div className={styles.categories}>
+        {values.map((value) => (
+          <button
+            key={value}
+            type="button"
+            className={`${styles.pill} ${selected === value ? styles.active : ''}`}
+            onClick={() => onChange(selected === value ? null : value)}
+          >
+            {formatName(value)}
+          </button>
+        ))}
+      </div>
+    </div>
   );
 }
