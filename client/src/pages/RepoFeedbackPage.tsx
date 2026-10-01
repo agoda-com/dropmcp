@@ -7,8 +7,8 @@ import {
   type RepoFeedbackStatus,
 } from '../api/repoFeedback';
 import FeedbackHeader from '../components/FeedbackHeader';
-import RepoFeedbackList from '../components/RepoFeedbackList';
-import RepoFeedbackToolbar from '../components/RepoFeedbackToolbar';
+import RepoFeedbackList from '../components/feedback/repo/RepoFeedbackList';
+import RepoFeedbackToolbar from '../components/feedback/repo/RepoFeedbackToolbar';
 import pageStyles from './FeedbackPage.module.css';
 
 export default function RepoFeedbackPage() {

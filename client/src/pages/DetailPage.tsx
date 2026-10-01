@@ -1,14 +1,15 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { fetchCatalogItem, type CatalogItem } from '../api/catalog';
-import ArgumentsSection from '../components/ArgumentsSection';
-import ExamplesSection from '../components/ExamplesSection';
-import ItemHeader from '../components/ItemHeader';
-import ItemHero from '../components/ItemHero';
-import ScreenshotsSection from '../components/ScreenshotsSection';
-import SkillContentSection from '../components/SkillContentSection';
-import ResourcesSection from '../components/ResourcesSection';
-import TelemetryPanel from '../components/TelemetryPanel';
+import ArgumentsSection from '../components/detail/ArgumentsSection';
+import DetailSection from '../components/detail/DetailSection';
+import ExamplesSection from '../components/detail/ExamplesSection';
+import ItemHeader from '../components/detail/ItemHeader';
+import ItemHero from '../components/detail/ItemHero';
+import ScreenshotGallery from '../components/detail/ScreenshotGallery';
+import SkillContentSection from '../components/detail/SkillContentSection';
+import ResourcesSection from '../components/detail/resources/ResourcesSection';
+import TelemetryPanel from '../components/detail/telemetry/TelemetryPanel';
 import ErrorState from '../components/ErrorState';
 import { formatName } from '../utils/format';
 import styles from './DetailPage.module.css';
@@ -67,7 +68,9 @@ export default function DetailPage() {
         )}
 
         {shots.length > 0 && (
-          <ScreenshotsSection urls={shots} />
+          <DetailSection title="Screenshots">
+            <ScreenshotGallery urls={shots} />
+          </DetailSection>
         )}
 
         {examples.length > 0 && (

@@ -1,7 +1,7 @@
 import type { BenchmarksResponse } from '../api/benchmarks';
-import BenchmarkResults from '../components/BenchmarkResults';
+import BenchmarkResults from '../components/benchmarks/BenchmarkResults';
 import FeedbackHeader from '../components/FeedbackHeader';
-import listStyles from '../components/FeedbackList.module.css';
+import listStyles from '../components/feedback/FeedbackList.module.css';
 import { useBenchmarks } from '../hooks/useBenchmarks';
 import styles from './BenchmarksPage.module.css';
 

@@ -1,8 +1,8 @@
 import { useState, useMemo } from 'react';
 import { useCatalog } from '../context/CatalogContext';
-import InstallPanel from '../components/InstallPanel';
-import SearchToolbar from '../components/SearchToolbar';
-import CatalogResults from '../components/CatalogResults';
+import InstallPanel from '../components/catalog/install/InstallPanel';
+import SearchToolbar from '../components/catalog/SearchToolbar';
+import CatalogResults from '../components/catalog/CatalogResults';
 import styles from './CatalogPage.module.css';
 
 export default function CatalogPage() {

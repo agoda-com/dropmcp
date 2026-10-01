@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { fetchFeedback, type FeedbackItem, type FeedbackStatus, type FeedbackType } from '../api/feedback';
 import FeedbackHeader from '../components/FeedbackHeader';
-import FeedbackToolbar from '../components/FeedbackToolbar';
-import FeedbackList from '../components/FeedbackList';
+import FeedbackToolbar from '../components/feedback/skill/FeedbackToolbar';
+import FeedbackList from '../components/feedback/skill/FeedbackList';
 import styles from './FeedbackPage.module.css';
 
 export default function FeedbackPage() {
