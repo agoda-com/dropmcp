@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { fetchBenchmarks, type BenchmarksResponse } from '../api/benchmarks';
 import { useCatalog } from '../context/CatalogContext';
@@ -21,13 +21,14 @@ export default function BenchmarksPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [params, setParams] = useSearchParams();
-  const view = useMemo(() => parseView(params), [params]);
+  const view = parseView(params);
 
-  const updateView = useCallback(
-    (patch: Partial<BenchmarkView>) =>
-      setParams(viewToParams({ ...view, ...patch }, params), { replace: true }),
-    [view, params, setParams],
-  );
+  function updateView(patch: Partial<BenchmarkView>) {
+    setParams(
+      (current) => viewToParams({ ...parseView(current), ...patch }, current),
+      { replace: true },
+    );
+  }
 
   useEffect(() => {
     if (catalogLoading || !benchmarksEnabled) return;
@@ -96,11 +97,11 @@ function PageBody({
 
   return (
     <>
-      {data.error && (
+      {data.error ? (
         <p className={styles.banner} role="status">
           {data.error}
         </p>
-      )}
+      ) : null}
       {data.skills.length === 0 ? (
         !data.error && (
           <div className={listStyles.empty}>
