@@ -1,7 +1,9 @@
 import { useState } from 'react';
-import type { BenchmarkSkill, BenchmarkTest } from '../api/benchmarks';
+import type { BenchmarkSkill } from '../api/benchmarks';
 import type { BenchmarkView } from '../utils/benchmarks';
-import { OverallCell, SkillCell, TestCell } from './BenchmarkCells';
+import BenchmarkOverallCell from './BenchmarkOverallCell';
+import BenchmarkSkillCell from './BenchmarkSkillCell';
+import BenchmarkTestRow from './BenchmarkTestRow';
 import styles from './BenchmarkMatrix.module.css';
 
 interface Props {
@@ -24,7 +26,7 @@ export default function BenchmarkSkillRows({ skill, models, view, lookbackDays }
             onToggle={() => setExpanded((value) => !value)}
           />
         </th>
-        <OverallCell
+        <BenchmarkOverallCell
           summary={skill.overall}
           testCount={0}
           view={view}
@@ -32,7 +34,7 @@ export default function BenchmarkSkillRows({ skill, models, view, lookbackDays }
           className={styles.allCol}
         />
         {models.map((model) => (
-          <SkillCell
+          <BenchmarkSkillCell
             key={model}
             cell={skill.cells[model]}
             testCount={skill.test_count}
@@ -44,7 +46,7 @@ export default function BenchmarkSkillRows({ skill, models, view, lookbackDays }
 
       {expanded &&
         skill.tests.map((test) => (
-          <TestRow
+          <BenchmarkTestRow
             key={test.name}
             skillName={skill.name}
             test={test}
@@ -80,33 +82,4 @@ function SkillToggle({
       </span>
     </button>
   );
-}
-
-function TestRow({
-  skillName,
-  test,
-  models,
-  view,
-  lookbackDays,
-}: Omit<Props, 'skill'> & { skillName: string; test: BenchmarkTest }) {
-  return (
-    <tr className={styles.testRow}>
-      <th scope="row" className={styles.nameCol} title={test.name}>
-        {testLabel(skillName, test.name)}
-      </th>
-      <td className={styles.missing} />
-      {models.map((model) => (
-        <TestCell
-          key={model}
-          run={test.results[model]}
-          view={view}
-          lookbackDays={lookbackDays}
-        />
-      ))}
-    </tr>
-  );
-}
-
-function testLabel(skill: string, test: string): string {
-  return test.startsWith(`${skill}/`) ? test.slice(skill.length + 1) : test;
 }
