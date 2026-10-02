@@ -8,6 +8,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 
 import httpx
+import pytest
 from sqlalchemy import select, update
 
 from dropmcp.memory.store import (
@@ -20,13 +21,15 @@ _KEY = re.compile(r"\[(MEM-[A-Z0-9]{6})\]")
 PAYMENTS = {"repo": "example-org/payments-api", "language": "csharp"}
 LEDGER = {"repo": "example-org/ledger", "language": "python"}
 BILLING = {"repo": "example-org/billing", "language": "go"}
+USER_EMAIL = "agent@example.com"
 
 
 @asynccontextmanager
-async def _http(mem):
+async def _http(mem, *, identified: bool = False):
     transport = httpx.ASGITransport(app=mem.app)
+    headers = {mem.settings.user_header: USER_EMAIL} if identified else None
     async with httpx.AsyncClient(
-        transport=transport, base_url="http://testserver"
+        transport=transport, base_url="http://testserver", headers=headers
     ) as http:
         yield http
 
@@ -160,7 +163,7 @@ async def test_admin_lists_filters_hidden_reports_and_stats(memory_server):
             .values(created_by="other@example.com")
         )
 
-        async with _http(mem) as http:
+        async with _http(mem, identified=True) as http:
             listed = await _ok(http, "/api/memory")
             assert _keys(listed)[0] == payments
             assert set(_keys(listed)) == {payments, ledger, billing_old, billing_new}
@@ -239,6 +242,46 @@ async def test_admin_lists_filters_hidden_reports_and_stats(memory_server):
             assert month["distinct_writers"] == 2
 
 
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/api/memory",
+        "/api/memory?hidden=true",
+        "/api/memory/reports",
+        "/api/memory/stats",
+        "/api/memory/{key}",
+    ],
+)
+async def test_admin_reads_require_header_so_hidden_memories_stay_hidden(
+    memory_server, path
+):
+    async with memory_server(ui_enabled=True) as mem:
+        hidden = await _remember(
+            mem,
+            context=LEDGER,
+            kind="setup",
+            title="Staging database uses the shared service login",
+            body="Connect with the shared service login from the vault entry.",
+        )
+        reported = await mem.report(
+            key=hidden,
+            problem="sensitive",
+            reason="It should not have been stored.",
+        )
+        assert reported.startswith("Reported")
+        url = path.format(key=hidden)
+
+        async with _http(mem) as http:
+            denied = await http.get(url)
+        async with _http(mem, identified=True) as http:
+            allowed = await http.get(url)
+
+        assert denied.status_code == 401
+        assert denied.json() == {"error": "identity header required"}
+        assert "shared service login" not in denied.text
+        assert allowed.status_code == 200
+
+
 async def test_admin_delete_requires_header_and_removes_memory(memory_server):
     async with memory_server(ui_enabled=True) as mem:
         payments = await _remember(
@@ -279,7 +322,7 @@ async def test_admin_delete_requires_header_and_removes_memory(memory_server):
         async with _http(mem) as http:
             denied = await http.delete(f"/api/memory/{payments}")
             assert denied.status_code == 401
-            still_there = await http.get(f"/api/memory/{payments}")
+            still_there = await http.get(f"/api/memory/{payments}", headers=header)
             assert still_there.status_code == 200
 
             unknown = await http.delete("/api/memory/MEM-NOSUCH", headers=header)
@@ -301,7 +344,7 @@ async def test_admin_delete_requires_header_and_removes_memory(memory_server):
 
             removed = await http.delete(f"/api/memory/{payments}", headers=header)
             assert removed.status_code == 200
-            gone = await http.get(f"/api/memory/{payments}")
+            gone = await http.get(f"/api/memory/{payments}", headers=header)
             assert gone.status_code == 404
 
         assert mem.sql(

@@ -85,6 +85,8 @@ export interface MemoryFilters {
   sort?: MemorySort;
 }
 
+const SIGN_IN_TO_VIEW = 'Sign in to view memories.';
+
 function buildQuery(filters: MemoryFilters): string {
   const params = new URLSearchParams();
   if (filters.search) params.set('search', filters.search);
@@ -102,6 +104,7 @@ export async function fetchMemories(
   filters: MemoryFilters = {},
 ): Promise<MemoryListResponse> {
   const res = await fetch(`/api/memory${buildQuery(filters)}`);
+  if (res.status === 401) throw new Error(SIGN_IN_TO_VIEW);
   if (!res.ok) throw new Error(`Could not load memories (${res.status}).`);
   const data: MemoryListResponse = await res.json();
   return {
@@ -114,12 +117,14 @@ export async function fetchMemories(
 
 export async function fetchMemory(key: string): Promise<MemoryDetailResponse> {
   const res = await fetch(`/api/memory/${encodeURIComponent(key)}`);
+  if (res.status === 401) throw new Error(SIGN_IN_TO_VIEW);
   if (!res.ok) throw new Error(`Could not load memory (${res.status}).`);
   return res.json();
 }
 
 export async function fetchOpenReports(): Promise<MemoryReport[]> {
   const res = await fetch('/api/memory/reports');
+  if (res.status === 401) throw new Error(SIGN_IN_TO_VIEW);
   if (!res.ok) throw new Error(`Could not load reports (${res.status}).`);
   const data: MemoryReportsResponse = await res.json();
   return Array.isArray(data.items) ? data.items : [];
@@ -127,6 +132,7 @@ export async function fetchOpenReports(): Promise<MemoryReport[]> {
 
 export async function fetchMemoryStats(): Promise<MemoryStatsResponse> {
   const res = await fetch('/api/memory/stats');
+  if (res.status === 401) throw new Error(SIGN_IN_TO_VIEW);
   if (!res.ok) throw new Error(`Could not load recall stats (${res.status}).`);
   const data: MemoryStatsResponse = await res.json();
   return { periods: Array.isArray(data.periods) ? data.periods : [] };

@@ -27,9 +27,18 @@ _SCOPE_FIELDS = ("repo", "system", "language", "domain", "task", "path")
 def register_admin_routes(
     mcp: FastMCP, store: MemoryStore, settings: Settings
 ) -> None:
+    def _require_user(request: Request) -> JSONResponse | None:
+        if user_from_request(request, settings.user_header) is None:
+            return JSONResponse(
+                {"error": "identity header required"}, status_code=401
+            )
+        return None
+
     # "reports" and "stats" are registered before "{key}" so they are not keys.
     @mcp.custom_route("/api/memory", methods=["GET"])
     async def memory_list(request: Request) -> JSONResponse:
+        if denied := _require_user(request):
+            return denied
         params = request.query_params
         return JSONResponse(
             list_memories(
@@ -46,14 +55,20 @@ def register_admin_routes(
 
     @mcp.custom_route("/api/memory/reports", methods=["GET"])
     async def memory_open_reports(request: Request) -> JSONResponse:
+        if denied := _require_user(request):
+            return denied
         return JSONResponse(list_open_reports(store))
 
     @mcp.custom_route("/api/memory/stats", methods=["GET"])
     async def memory_stats(request: Request) -> JSONResponse:
+        if denied := _require_user(request):
+            return denied
         return JSONResponse(recall_stats(store))
 
     @mcp.custom_route("/api/memory/{key}", methods=["GET"])
     async def memory_get(request: Request) -> JSONResponse:
+        if denied := _require_user(request):
+            return denied
         detail = memory_detail(store, request.path_params["key"])
         if detail is None:
             return JSONResponse({"error": "not found"}, status_code=404)
@@ -61,10 +76,8 @@ def register_admin_routes(
 
     @mcp.custom_route("/api/memory/{key}", methods=["DELETE"])
     async def memory_delete(request: Request) -> JSONResponse:
-        if user_from_request(request, settings.user_header) is None:
-            return JSONResponse(
-                {"error": "identity header required"}, status_code=401
-            )
+        if denied := _require_user(request):
+            return denied
         key = request.path_params["key"]
         if not delete_memory(store, key):
             return JSONResponse({"error": "not found"}, status_code=404)
