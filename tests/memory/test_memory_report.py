@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+from sqlalchemy import select
+
 from dropmcp.memory.keys import KEY_ALPHABET, new_key
-from dropmcp.memory.store import report_to_dict
+from dropmcp.memory.store import memory_report_table, report_to_dict
 
 REPO = "example-org/payments-api"
 OTHER_REPO = "example-org/ledger-service"
@@ -22,10 +24,8 @@ async def _remember(server, title: str, repo: str = REPO) -> str:
 
 
 def _reports(server) -> list[dict]:
-    return [
-        report_to_dict(row)
-        for row in server.sql("SELECT * FROM memory_report ORDER BY created_at, id")
-    ]
+    table = memory_report_table
+    return [report_to_dict(row) for row in server.sql(select(table))]
 
 
 def _mangle(key: str) -> str:
@@ -45,15 +45,14 @@ async def test_keyed_reports_dedupe_on_memory_and_problem(memory_server, backend
         second = await server.report(key=key, problem="stale", reason="Still gone.")
         third = await server.report(key=key, problem="invalid", reason="Never true.")
 
-        reports = _reports(server)
+        reports = {report["problem"]: report for report in _reports(server)}
         assert len(reports) == 2
-        stale, invalid = reports
+        stale, invalid = reports["stale"], reports["invalid"]
         assert first == f"Reported ({stale['id']})."
         assert second == f"Already reported ({stale['id']}, occurrences: 2)."
         assert third == f"Reported ({invalid['id']})."
         assert stale["memory_id"] == memory_id
         assert stale["reported_key"] == key
-        assert stale["problem"] == "stale"
         assert stale["occurrence_count"] == 2
         assert stale["last_seen_at"] >= stale["created_at"]
         assert stale["candidate_keys"] == []
@@ -83,7 +82,9 @@ async def test_unkeyed_report_stores_description_and_candidate_keys(
     async with memory_server() as server:
         key = await _remember(server, FLAG_TITLE)
         await _remember(server, "Integration tests need a running Redis")
-        await _remember(server, "Ledger migrations run in a single transaction", OTHER_REPO)
+        await _remember(
+            server, "Ledger migrations run in a single transaction", OTHER_REPO
+        )
 
         result = await server.report(
             memory="Said acceptance tests need DOTNET_ROLL_FORWARD=LatestMajor",
@@ -141,7 +142,9 @@ async def test_mangled_key_is_stored_unkeyed_as_sent(memory_server, backend):
 async def test_well_formed_unknown_key_is_stored_unkeyed(memory_server, backend):
     async with memory_server() as server:
         key = await _remember(server, FLAG_TITLE)
-        unknown = next(candidate for candidate in iter(new_key, None) if candidate != key)
+        unknown = next(
+            candidate for candidate in iter(new_key, None) if candidate != key
+        )
 
         result = await server.report(
             key=unknown,
@@ -209,7 +212,11 @@ async def test_unkeyed_duplicates_dedupe_on_repo_problem_and_description(
 
         reports = _reports(server)
         assert len(reports) == 3
-        stale = reports[0]
+        [stale] = [
+            report
+            for report in reports
+            if report["problem"] == "stale" and report["context"]["repo"] == REPO
+        ]
         assert first.startswith(f"Reported ({stale['id']}).")
         assert second.startswith(f"Already reported ({stale['id']}, occurrences: 2).")
         assert stale["occurrence_count"] == 2
@@ -236,7 +243,9 @@ async def test_correction_and_context_round_trip(memory_server, backend):
             context={"repo": REPO, "path": "src/cache"},
         )
 
-        keyed, unkeyed = _reports(server)
+        reports = _reports(server)
+        [keyed] = [report for report in reports if report["memory_id"] is not None]
+        [unkeyed] = [report for report in reports if report["memory_id"] is None]
         assert keyed["correction"] == (
             "Acceptance tests run on the default roll-forward policy."
         )

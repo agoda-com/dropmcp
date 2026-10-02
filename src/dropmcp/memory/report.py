@@ -11,13 +11,14 @@ from typing import Any
 from fastmcp.tools.base import Tool, ToolResult
 from mcp.types import TextContent
 from pydantic import PrivateAttr
-from sqlalchemy import insert, select
+from sqlalchemy import insert, select, update
 
 from dropmcp.config import Settings
 from dropmcp.identity import resolve_user_email
 from dropmcp.memory import lint
 from dropmcp.memory.context import MemoryContext
 from dropmcp.memory.keys import is_valid_key
+from dropmcp.memory.search import search
 from dropmcp.memory.store import MemoryStore, memory_report_table, report_to_dict
 from dropmcp.memory.vocabulary import Vocabulary, context_schema
 from dropmcp.repo_feedback import _normalize_fingerprint_part
@@ -114,35 +115,51 @@ def insert_report(
     created_by: str | None,
     client: str | None,
 ) -> dict[str, Any]:
+    """Insert a report, or bump the open report with the same fingerprint."""
     now = datetime.now(timezone.utc)
-    report_id = str(uuid.uuid4())
+    fingerprint = make_report_fingerprint(memory_id, context, problem, described_memory)
+    table = memory_report_table
     with store.engine.begin() as conn:
-        conn.execute(
-            insert(memory_report_table).values(
-                id=report_id,
-                created_at=now,
-                last_seen_at=now,
-                created_by=created_by,
-                client=client,
-                model=model,
-                memory_id=memory_id,
-                reported_key=reported_key,
-                described_memory=described_memory,
-                candidate_keys=candidate_keys,
-                problem=problem,
-                reason=reason,
-                correction=correction,
-                context=context.to_json(),
-                fingerprint=make_report_fingerprint(
-                    memory_id, context, problem, described_memory
-                ),
-                occurrence_count=1,
-                status="open",
+        report_id = conn.execute(
+            select(table.c.id)
+            .where(table.c.fingerprint == fingerprint)
+            .where(table.c.status == "open")
+            .order_by(table.c.last_seen_at.desc())
+            .limit(1)
+        ).scalar_one_or_none()
+        if report_id is not None:
+            conn.execute(
+                update(table)
+                .where(table.c.id == report_id)
+                .values(
+                    occurrence_count=table.c.occurrence_count + 1,
+                    last_seen_at=now,
+                )
             )
-        )
-        row = conn.execute(
-            select(memory_report_table).where(memory_report_table.c.id == report_id)
-        ).fetchone()
+        else:
+            report_id = str(uuid.uuid4())
+            conn.execute(
+                insert(table).values(
+                    id=report_id,
+                    created_at=now,
+                    last_seen_at=now,
+                    created_by=created_by,
+                    client=client,
+                    model=model,
+                    memory_id=memory_id,
+                    reported_key=reported_key,
+                    described_memory=described_memory,
+                    candidate_keys=candidate_keys,
+                    problem=problem,
+                    reason=reason,
+                    correction=correction,
+                    context=context.to_json(),
+                    fingerprint=fingerprint,
+                    occurrence_count=1,
+                    status="open",
+                )
+            )
+        row = conn.execute(select(table).where(table.c.id == report_id)).fetchone()
     return report_to_dict(row)
 
 
@@ -212,15 +229,23 @@ class MemoryReportTool(Tool):
             if key is not None and is_valid_key(key)
             else None
         )
+        if memory is None and described_memory is None:
+            return (
+                f"Memory report not recorded: the key {key} does not match a "
+                "memory. Describe what the memory said in `memory`."
+            )
         if memory is not None and problem == "sensitive":
             self._store.hide_memory(memory["id"])
-        # TODO(S7): dedupe; candidate keys for unkeyed reports.
         report = insert_report(
             self._store,
             memory_id=memory["id"] if memory is not None else None,
             reported_key=key,
             described_memory=described_memory,
-            candidate_keys=[],
+            candidate_keys=(
+                []
+                if memory is not None
+                else self._candidate_keys(context, described_memory)
+            ),
             problem=problem,
             reason=reason,
             correction=correction,
@@ -229,4 +254,30 @@ class MemoryReportTool(Tool):
             created_by=resolve_user_email(self._settings.user_header),
             client=client_bucket(),
         )
-        return f"Reported ({report['id']})."
+        if report["occurrence_count"] > 1:
+            text = (
+                f"Already reported ({report['id']}, "
+                f"occurrences: {report['occurrence_count']})."
+            )
+        else:
+            text = f"Reported ({report['id']})."
+        if memory is not None:
+            return text
+        if report["candidate_keys"]:
+            return f"{text} Possible matches: {', '.join(report['candidate_keys'])}"
+        return f"{text} No possible matches."
+
+    def _candidate_keys(self, context: MemoryContext, description: str) -> list[str]:
+        try:
+            matches = search(
+                self._store,
+                context,
+                description,
+                limit=3,
+                candidate_cap=self._settings.memory_candidate_cap,
+                embedder=self._settings.memory_embedder,
+            )
+        except Exception:
+            logger.exception("Failed to find candidate memories for a report")
+            return []
+        return [match["key"] for match in matches]
