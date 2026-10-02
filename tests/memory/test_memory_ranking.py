@@ -9,11 +9,12 @@ import pytest
 from sqlalchemy import update
 
 from dropmcp.memory.context import MemoryContext
-from dropmcp.memory.recall import NO_RESULTS, PREFACE, render_entry
+from dropmcp.memory.recall import NO_RESULTS, PREFACE
 from dropmcp.memory.search import (
     HALF_LIFE_DAYS,
     apply_budget,
     quality_factor,
+    render_entry,
     scope_boost,
 )
 from dropmcp.memory.store import memory_table
@@ -374,3 +375,4 @@ def test_apply_budget_truncates_one_oversized_entry_and_clamps_limit():
         short.append(row)
     assert len(apply_budget(short, 50)) == 10
     assert len(apply_budget(short, 3)) == 3
+    assert len(apply_budget(short, "nope")) == 5

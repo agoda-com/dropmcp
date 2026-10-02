@@ -199,8 +199,6 @@ def quality_factor(row: dict[str, Any], now: datetime) -> float:
 def apply_budget(
     rows: list[dict[str, Any]], limit: int, max_chars: int = 4000
 ) -> list[dict[str, Any]]:
-    from dropmcp.memory.recall import render_entry
-
     chosen: list[dict[str, Any]] = []
     used = 0
     capped = _clamp_limit(limit)
@@ -223,7 +221,7 @@ def _clamp_limit(limit: int) -> int:
     try:
         value = int(limit)
     except (TypeError, ValueError):
-        return 1
+        return 5
     return max(1, min(value, 10))
 
 
@@ -311,3 +309,52 @@ def _as_utc(value: Any) -> datetime | None:
     if parsed.tzinfo is None:
         parsed = parsed.replace(tzinfo=timezone.utc)
     return parsed.astimezone(timezone.utc)
+
+
+def render_entry(memory: dict[str, Any]) -> str:
+    reports = int(memory.get("open_reports") or 0)
+    count = int(memory.get("occurrence_count") or 0)
+    lines = [
+        f"[{memory['key']}] {memory['title']}",
+        f"kind: {memory.get('kind') or ''}",
+        f"scope: {_scope_line(memory)}",
+        f"age: {_age_days(memory.get('created_at'))} days",
+        f"confirmations: {count}",
+        f"last confirmed: {_ymd(memory.get('last_confirmed_at'))}",
+        f"open reports: {reports}",
+        str(memory.get("body") or ""),
+    ]
+    return "\n".join(lines)
+
+
+def _scope_line(memory: dict[str, Any]) -> str:
+    stack = memory.get("stack") or ()
+    if isinstance(stack, str):
+        stack = (stack,)
+    context = MemoryContext(
+        repo=_text(memory, "repo").lower(),
+        system=_text(memory, "system").lower(),
+        language=_text(memory, "language").lower(),
+        domain=_text(memory, "domain").lower(),
+        stack=tuple(str(tag).strip().lower() for tag in stack if str(tag).strip()),
+        task=_text(memory, "task").lower(),
+        path=_text(memory, "path"),
+    )
+    return context.render_line()
+
+
+def _age_days(value: Any) -> int:
+    created = _as_utc(value)
+    if created is None:
+        return 0
+    seconds = (datetime.now(timezone.utc) - created).total_seconds()
+    if seconds <= 0:
+        return 0
+    return int(seconds // 86400)
+
+
+def _ymd(value: Any) -> str:
+    moment = _as_utc(value)
+    if moment is None:
+        return "unknown"
+    return moment.date().isoformat()

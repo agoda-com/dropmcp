@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 import time
-from datetime import datetime, timezone
 from typing import Any
 
 from fastmcp.tools.base import Tool, ToolResult
@@ -14,7 +13,7 @@ from pydantic import PrivateAttr
 from dropmcp.config import Settings
 from dropmcp.identity import resolve_user_email
 from dropmcp.memory.context import MemoryContext
-from dropmcp.memory.search import _as_utc, search
+from dropmcp.memory.search import render_entry, search
 from dropmcp.memory.store import MemoryStore
 from dropmcp.memory.vocabulary import Vocabulary, context_schema
 from dropmcp.telemetry import client_bucket, track
@@ -68,64 +67,6 @@ def _limit(raw: Any) -> int:
     except (TypeError, ValueError):
         return DEFAULT_LIMIT
     return max(1, min(value, MAX_LIMIT))
-
-
-def render_entry(memory: dict[str, Any]) -> str:
-    reports = int(memory.get("open_reports") or 0)
-    count = int(memory.get("occurrence_count") or 0)
-    lines = [
-        f"[{memory['key']}] {memory['title']}",
-        f"kind: {memory.get('kind') or ''}",
-        f"scope: {_scope_line(memory)}",
-        f"age: {_age_days(memory.get('created_at'))} days",
-        f"confirmations: {count}",
-        f"last confirmed: {_ymd(memory.get('last_confirmed_at'))}",
-        f"open reports: {reports}",
-        str(memory.get("body") or ""),
-    ]
-    return "\n".join(lines)
-
-
-def _scope_line(memory: dict[str, Any]) -> str:
-    stack = memory.get("stack") or ()
-    if isinstance(stack, str):
-        stack = (stack,)
-    context = MemoryContext(
-        repo=_cell(memory, "repo").lower(),
-        system=_cell(memory, "system").lower(),
-        language=_cell(memory, "language").lower(),
-        domain=_cell(memory, "domain").lower(),
-        stack=tuple(
-            str(tag).strip().lower() for tag in stack if str(tag).strip()
-        ),
-        task=_cell(memory, "task").lower(),
-        path=_cell(memory, "path"),
-    )
-    return context.render_line()
-
-
-def _cell(memory: dict[str, Any], name: str) -> str:
-    value = memory.get(name)
-    if value is None:
-        return ""
-    return str(value).strip()
-
-
-def _age_days(value: Any) -> int:
-    created = _as_utc(value)
-    if created is None:
-        return 0
-    seconds = (datetime.now(timezone.utc) - created).total_seconds()
-    if seconds <= 0:
-        return 0
-    return int(seconds // 86400)
-
-
-def _ymd(value: Any) -> str:
-    moment = _as_utc(value)
-    if moment is None:
-        return "unknown"
-    return moment.date().isoformat()
 
 
 class MemoryRecallTool(Tool):
