@@ -28,11 +28,8 @@ _SECRET_PATTERNS = tuple(
     )
 )
 
-_TOKEN = re.compile(r"[A-Za-z0-9+/_=-]{24,}")
+_TOKEN = re.compile(r"[A-Za-z0-9_+]{24,}={0,2}")
 _HEX = re.compile(r"[0-9a-fA-F]+")
-_UUID = re.compile(
-    r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
-)
 _MIN_ENTROPY_BITS = 4.0
 
 _AGENT_ADDRESSED = re.compile(
@@ -68,7 +65,7 @@ def _shannon_entropy(token: str) -> float:
 
 def _has_high_entropy_token(text: str) -> bool:
     for token in _TOKEN.findall(text):
-        if _HEX.fullmatch(token) or _UUID.fullmatch(token):
+        if _HEX.fullmatch(token):
             continue
         has_digit = any(c.isdigit() for c in token)
         has_letter = any(c.isalpha() for c in token)

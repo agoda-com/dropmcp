@@ -138,6 +138,24 @@ async def test_legitimate_memory_is_stored(memory_server, body):
         assert memory_count(mem) == 1
 
 
+@pytest.mark.parametrize("field", ["evidence", "body"])
+@pytest.mark.parametrize(
+    "reference",
+    [
+        "https://github.com/example-org/repo/pull/1234/files",
+        "feat/ABC-1234-improve-error-handling",
+        "src/components/v2/header/navigation_bar.tsx",
+    ],
+    ids=["pr-link", "branch-name", "path-with-digits"],
+)
+async def test_links_branches_and_paths_are_stored(memory_server, field, reference):
+    async with memory_server() as mem:
+        result = await mem.remember(**memory_args(**{field: f"See {reference}."}))
+
+        assert result.startswith("Remembered ["), result
+        assert memory_count(mem) == 1
+
+
 async def test_report_with_credential_in_reason_is_refused(memory_server):
     async with memory_server() as mem:
         result = await mem.report(
