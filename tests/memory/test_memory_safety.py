@@ -86,6 +86,18 @@ def report_count(mem) -> int:
             ),
             "mostly commands",
         ),
+        (
+            lambda: memory_args(
+                evidence="Reproduced in /home/jdoe/src/payments-api/tests."
+            ),
+            "local filesystem path",
+        ),
+        (
+            lambda: memory_args(
+                body=r"The tool caches to C:\Users\jdoe\AppData\Local\tool."
+            ),
+            "local filesystem path",
+        ),
     ],
     ids=[
         "aws-key",
@@ -94,6 +106,8 @@ def report_count(mem) -> int:
         "agent-addressed",
         "tool-call",
         "commands",
+        "unix-home-path",
+        "windows-home-path",
     ],
 )
 async def test_unsafe_memory_is_refused_with_reason_and_not_stored(
@@ -127,8 +141,15 @@ async def test_credential_is_never_echoed_in_the_refusal(memory_server):
             "dotnet tool run migrate\n\n"
             "Running it from src/ silently uses the default connection string."
         ),
+        "GET /users/{id} returns 200 with an empty body when the user is missing.",
     ],
-    ids=["commit-sha", "uuid", "env-assignment", "one-command-with-explanation"],
+    ids=[
+        "commit-sha",
+        "uuid",
+        "env-assignment",
+        "one-command-with-explanation",
+        "api-route",
+    ],
 )
 async def test_legitimate_memory_is_stored(memory_server, body):
     async with memory_server() as mem:

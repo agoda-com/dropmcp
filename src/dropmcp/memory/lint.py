@@ -41,6 +41,11 @@ _AGENT_ADDRESSED = re.compile(
     r"|system\s+prompt)\b"
 )
 
+# A user's home directory: machine-specific, and it often names the person.
+_LOCAL_PATH = re.compile(
+    r"(?<![\w/])(?:/home/|/Users/|(?i:[a-z]:[\\/]users[\\/]))[^\s/\\]+"
+)
+
 _TOOL_CALL = re.compile(
     r"(?i)</?\s*(?:tool_call|function_calls)\b|<\s*invoke\b"
     r"|\bfunctions\.\w+\s*\("
@@ -134,6 +139,10 @@ def _check_field(
     if _has_tool_call(text):
         reasons.append(
             f"{name} contains tool-call syntax; describe the behaviour in prose."
+        )
+    if _LOCAL_PATH.search(text):
+        reasons.append(
+            f"{name} contains a local filesystem path; use a path inside the repo."
         )
     if commands and _is_command_dominated(text):
         reasons.append(
