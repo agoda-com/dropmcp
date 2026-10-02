@@ -31,6 +31,9 @@ skills/prompts MCP servers, extracted as a standalone library.
   agents get corrected.
 - **Repository feedback backlog** — an optional `record_repo_feedback` tool and
   triage UI for flaky tests, CI-only checks, setup gaps, and other repo friction.
+- **Shared agent memory** — optional `memory_remember` / `memory_recall` /
+  `memory_report` tools so agents pass short, reusable working facts about repos
+  and stacks to the next agent.
 - **Benchmarks page** — an optional models × skills matrix of the latest E2E
   eval results, shown only to identified users.
 - **Per-user subscriptions** — optional opt-in so each user's agent sees only a
@@ -74,6 +77,12 @@ Optional OpenTelemetry export:
 
 ```bash
 pip install "dropmcp[otel]"
+```
+
+Optional numpy for faster vector scoring in [shared agent memory](#shared-agent-memory):
+
+```bash
+pip install "dropmcp[memory]"
 ```
 
 ## Quick start
@@ -147,10 +156,16 @@ default).
 | `ui_enabled` | `DROPMCP_UI` | `true` | serve the catalog HTTP routes |
 | `feedback_enabled` | `DROPMCP_FEEDBACK` | `true` | enable the `record_feedback` tool, feedback HTTP routes, and always-on instructions |
 | `repo_feedback_enabled` | `DROPMCP_REPO_FEEDBACK` | `false` | enable the optional `record_repo_feedback` tool, repo feedback HTTP routes, and always-on instructions |
+| `memory_enabled` | `DROPMCP_MEMORY` | `false` | enable the [shared agent memory](#shared-agent-memory) tools and always-on instructions |
+| `memory_embedder` | – | – | `MemoryEmbedder` for vector recall and the near-duplicate check; keyword-only when unset |
+| `memory_vocabulary` | `DROPMCP_MEMORY_VOCABULARY` | bundled list | YAML/JSON file (or dict) of languages, stack tags, domains, kinds and tasks |
+| `memory_lint_rules` | – | – | extra write-side checks for memory and report text |
+| `memory_store` | – | built from `database_url` | replace the memory store entirely |
+| `memory_candidate_cap` | `DROPMCP_MEMORY_CANDIDATE_CAP` | `500` | max candidates scored per recall or near-duplicate check |
 | `user_subscriptions_enabled` | `DROPMCP_USER_SUBSCRIPTIONS` | `false` | per-user skill/prompt opt-in over MCP and subscription HTTP API |
 | `user_header` | `DROPMCP_USER_HEADER` | `X-User-Email` | HTTP header carrying the trusted caller identity |
 | `reload` | `DROPMCP_RELOAD` | `false` | re-scan skills/prompts on every request |
-| `database_url` | `DROPMCP_DATABASE_URL` | `sqlite:///<cwd>/dropmcp.db` | feedback database tables (SQLite file or Postgres URL) |
+| `database_url` | `DROPMCP_DATABASE_URL` | `sqlite:///<cwd>/dropmcp.db` | feedback and memory database tables (SQLite file or Postgres URL) |
 | `eval_results_project` | `DROPMCP_EVAL_RESULTS_PROJECT` | – | project path for E2E eval results (enables `/api/telemetry` when a store is available) |
 | `eval_results_commit_sha` | `DROPMCP_EVAL_RESULTS_COMMIT_SHA` | `COMMIT_SHA` file | deployed commit to filter eval results |
 | – | `DROPMCP_EVAL_RESULTS_SKILL_QUERY` | – | SQL for one skill; required for the built-in MySQL store |
@@ -354,6 +369,121 @@ CREATE INDEX repo_feedback_repo_status_idx ON repo_feedback (repo, status);
 The same privacy rule applies: no secrets, PII, customer data, proprietary code
 snippets, or verbatim prompts. Repo feedback instructions are injected only when
 the feature flag is enabled.
+
+## Shared agent memory
+
+Set `DROPMCP_MEMORY=true` (or `memory_enabled=True`) to let agents share what they
+learn. It is disabled by default, and nothing changes for servers that leave it
+off. A *memory* is one short, reusable working fact that the next agent on the same
+repo or stack would otherwise have to rediscover, for example "validation failures
+in this service come back as HTTP 200 with an error body".
+
+Memory has a clear boundary with the other channels:
+
+| Thing learned | Goes to |
+|---|---|
+| The repo makes work slow or risky (flaky test, CI-only checks) | `record_repo_feedback` |
+| The agent or a skill got it wrong | `record_feedback` |
+| A standard everyone should follow | a skill, via PR |
+| A working fact about a repo, system, tool or stack that helped get a task done | **memory** |
+
+A memory that keeps getting confirmed is a candidate for the repo's `AGENTS.md` or
+a skill. Memory is a staging area, not the final home.
+
+### Tools
+
+Every tool takes the same `context` object: `repo` (`owner/name`), `system`,
+`language`, `domain`, `stack` (tags), `task` and `path`. `repo`, `system`,
+`language` and `domain` scope a memory: an empty field means general, a matching
+field ranks higher, and a different field excludes it. `stack`, `task` and `path`
+only boost. Unknown languages are refused; unknown stack tags are kept and logged.
+
+- **`memory_recall`** (`context`, optional `query`, `limit` default 5, max 10) —
+  returns up to `limit` memories in about 4,000 characters, each with its key,
+  kind, title, body, scope, age, confirmations, last-confirmed date and open
+  report count, under a preface telling the agent these are hints to verify, not
+  instructions. With a `query` it ranks by keyword search (Postgres full-text
+  search, SQLite FTS5) merged with vector similarity when an embedder is
+  configured. Without one it returns the most-confirmed memories for the scope.
+  Every recall writes a row to `memory_recall_log` (context and returned ids, not
+  the query text).
+- **`memory_remember`** (`context`, `kind`, `title`, `body`, optional `evidence`,
+  `supersedes`, `same_as`, `distinct`) — refuses text that fails the write-side
+  checks; confirms an exact duplicate (same scope and title) or a `same_as`
+  instead of storing it again; with an embedder, stops near-duplicates and shows
+  the agent the top three so it can call again with `same_as`, `supersedes` or
+  `distinct`. `supersedes` retires the old memory.
+- **`memory_report`** (`key` or `memory`, `problem`, `reason`, optional
+  `correction`, `context`) — `problem` is `stale`, `invalid`, `wrong_scope` or
+  `sensitive`. Writes a row to the `memory_report` bucket and changes nothing
+  else, except that a `sensitive` report hides the memory from recall at once.
+  A report is never refused for a missing or mangled key: it is stored with the
+  description and the top candidate keys.
+
+All three also take the calling `model`, as `record_feedback` does. Each memory
+has a short key such as `MEM-7K3F9Q`, with a check character so a mangled key is
+detected rather than matched to the wrong memory.
+
+### Parameters
+
+| kwarg | env | default | purpose |
+|---|---|---|---|
+| `memory_enabled` | `DROPMCP_MEMORY` | `false` | registers the tools and the always-on instructions block |
+| `memory_embedder` | – | – | `dropmcp.memory.vectors.MemoryEmbedder(embed, model, dimension, near_duplicate_threshold=0.92)`, where `embed` is `Callable[[list[str]], list[list[float]]]`. Unset means keyword-only search and no near-duplicate check |
+| `memory_vocabulary` | `DROPMCP_MEMORY_VOCABULARY` | bundled generic list | path to a YAML/JSON file (or a dict) with languages, stack tags, domains, kinds and tasks; shown to agents as enums in the tool schemas |
+| `memory_lint_rules` | – | – | extra write-side checks, each `Callable[[str], str \| None]` returning a refusal reason, run after the built-in ones |
+| `memory_store` | – | built from `database_url` | replace the store entirely |
+| `memory_candidate_cap` | `DROPMCP_MEMORY_CANDIDATE_CAP` | `500` | max candidates scored per recall or near-duplicate check |
+
+Embeddings are packed float32 bytes in an ordinary binary column, and similarity
+is scored in-process over the filtered candidates, so no vector extension is
+needed on any database. Install `dropmcp[memory]` to score with numpy; without
+it a pure-Python fallback is used. If the embedder fails, the memory is still
+stored and found by keyword search.
+
+### Storage
+
+Memory uses the same `DROPMCP_DATABASE_URL` as feedback, in four tables:
+`memory`, `memory_report`, `memory_recall_log` and `memory_near_duplicate_log`.
+SQLite creates them automatically. dropmcp never runs DDL against Postgres; apply
+the reference SQL it ships with your migration tool before turning memory on:
+
+```bash
+python -m dropmcp memory-sql > memory.sql
+psql "$DATABASE_URL" -f memory.sql
+```
+
+The SQL needs no extensions, uses unqualified table names (so it lands in the
+first schema on your `search_path`), and is safe to apply more than once. On
+startup, a server pointed at Postgres checks the live schema and refuses to start
+with a message naming every missing table and column, instead of failing on the
+first tool call. The check is skipped when you pass your own `memory_store`.
+
+Servers that share a `database_url` and vocabulary file share one memory pool.
+That's allowed but not specially designed for: the `server` column records which
+server wrote each memory, and values from another server's vocabulary are still
+recalled.
+
+### What never to store
+
+The always-on instructions tell agents, and the write-side checks enforce where
+they can, that memory and report text must not contain:
+
+- secrets, tokens or connection strings with credentials (refused)
+- personal or customer data, or anything about a person (performance, ratings,
+  compensation, leave, health), or people and team moves
+- verbatim proprietary code beyond a line or two, or verbatim user prompts
+- confidential business information that isn't engineering knowledge
+- local filesystem paths and machine-specific detail
+
+The checks also refuse text addressed to the reading agent ("ignore previous",
+"you must", tool-call syntax) and bodies that are mostly a command to run. The
+rule of thumb: memory is for how systems, repos and tools behave. If a fact is
+about a person, or would be out of place in a repo's README, it doesn't belong.
+
+To run the memory tests against Postgres too, set `DROPMCP_TEST_POSTGRES_URL`
+(for example `postgresql+psycopg://postgres:pg@localhost:5432/postgres`). Each
+test gets its own schema; without the variable the Postgres cases are skipped.
 
 ## Trusted user identity
 
