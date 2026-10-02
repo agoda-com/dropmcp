@@ -65,20 +65,15 @@ def search(
         return []
 
     now = datetime.now(timezone.utc)
-    rrf_scores: dict[str, float] | None = None
     if query:
         lists = ranked_lists(
             store, list(candidates.values()), query, context, embedder
         )
-        if any(lists):
-            rrf_scores = rrf_merge(lists)
-
-    if rrf_scores is not None:
         final = {
             row_id: score
             * scope_boost(candidates[row_id], context)
             * quality_factor(candidates[row_id], now)
-            for row_id, score in rrf_scores.items()
+            for row_id, score in rrf_merge(lists).items()
             if row_id in candidates
         }
     else:

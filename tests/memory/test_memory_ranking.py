@@ -234,6 +234,24 @@ async def test_recalled_entry_shows_open_report_count(memory_server):
         assert "open reports: 1\n" in text
 
 
+async def test_query_with_no_shared_token_returns_no_results(memory_server):
+    context = {"repo": "example-org/payments-api", "language": "csharp"}
+    async with memory_server() as mem:
+        await _remember(
+            mem,
+            context=context,
+            title="Repo validation returns HTTP 200",
+            body="Read the error body; the status code stays 200.",
+        )
+        stored = await mem.recall(context=context)
+        assert "Repo validation returns HTTP 200" in stored
+
+        text = await mem.recall(context=context, query="xylophone")
+
+        assert text == NO_RESULTS
+        assert PREFACE not in text
+
+
 async def test_preface_is_present_once_and_omitted_when_empty(memory_server):
     context = {"repo": "example-org/empty-api"}
     async with memory_server() as mem:
