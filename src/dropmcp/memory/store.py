@@ -253,6 +253,50 @@ class MemoryStore:
         embedding_model: str | None,
         embedding_dim: int | None,
     ) -> dict[str, Any]:
+        return self._insert_memory(
+            None,
+            context=context,
+            kind=kind,
+            title=title,
+            body=body,
+            evidence=evidence,
+            fingerprint=fingerprint,
+            model=model,
+            server=server,
+            created_by=created_by,
+            client=client,
+            embedding=embedding,
+            embedding_model=embedding_model,
+            embedding_dim=embedding_dim,
+        )
+
+    def insert_superseding_memory(
+        self, superseded_id: str, **memory: Any
+    ) -> dict[str, Any]:
+        """Insert a memory and mark ``superseded_id`` as replaced by it, atomically.
+
+        ``memory`` takes the keyword arguments of ``insert_memory``.
+        """
+        return self._insert_memory(superseded_id, **memory)
+
+    def _insert_memory(
+        self,
+        superseded_id: str | None,
+        *,
+        context: MemoryContext,
+        kind: str,
+        title: str,
+        body: str,
+        evidence: str | None,
+        fingerprint: str,
+        model: str,
+        server: str,
+        created_by: str | None,
+        client: str | None,
+        embedding: bytes | None,
+        embedding_model: str | None,
+        embedding_dim: int | None,
+    ) -> dict[str, Any]:
         now = datetime.now(timezone.utc)
         memory_id = str(uuid.uuid4())
         values = {
@@ -287,6 +331,12 @@ class MemoryStore:
             try:
                 with self.engine.begin() as conn:
                     conn.execute(insert(memory_table).values(key=key, **values))
+                    if superseded_id is not None:
+                        conn.execute(
+                            update(memory_table)
+                            .where(memory_table.c.id == superseded_id)
+                            .values(status="superseded", superseded_by=memory_id)
+                        )
                 break
             except IntegrityError:
                 if attempt == _KEY_ATTEMPTS - 1 or not self._key_exists(key):
@@ -309,6 +359,82 @@ class MemoryStore:
         with self.engine.connect() as conn:
             row = conn.execute(stmt).fetchone()
         return memory_to_dict(row) if row is not None else None
+
+    def find_active_by_fingerprint(self, fingerprint: str) -> dict[str, Any] | None:
+        stmt = (
+            select(memory_table)
+            .where(memory_table.c.fingerprint == fingerprint)
+            .where(memory_table.c.status == "active")
+            .order_by(memory_table.c.created_at)
+            .limit(1)
+        )
+        with self.engine.connect() as conn:
+            row = conn.execute(stmt).fetchone()
+        return memory_to_dict(row) if row is not None else None
+
+    def confirm_memory(self, memory_id: str) -> dict[str, Any] | None:
+        stmt = (
+            update(memory_table)
+            .where(memory_table.c.id == memory_id)
+            .values(
+                occurrence_count=memory_table.c.occurrence_count + 1,
+                last_confirmed_at=datetime.now(timezone.utc),
+            )
+        )
+        with self.engine.begin() as conn:
+            conn.execute(stmt)
+        return self.get_memory(memory_id)
+
+    def near_duplicate_candidates(
+        self, context: MemoryContext, embedding_model: str, cap: int
+    ) -> list[Mapping[str, Any]]:
+        stmt = (
+            select(
+                memory_table.c.key,
+                memory_table.c.title,
+                memory_table.c.embedding,
+            )
+            .where(self.scope_clause(context))
+            .where(memory_table.c.embedding.is_not(None))
+            .where(memory_table.c.embedding_model == embedding_model)
+            .order_by(memory_table.c.last_confirmed_at.desc())
+            .limit(cap)
+        )
+        with self.engine.connect() as conn:
+            return [_mapping(row) for row in conn.execute(stmt)]
+
+    def log_near_duplicate(
+        self,
+        *,
+        fingerprint: str,
+        top_key: str,
+        top_similarity: float,
+        threshold: float,
+        embedding_model: str,
+    ) -> None:
+        with self.engine.begin() as conn:
+            conn.execute(
+                insert(memory_near_duplicate_log_table).values(
+                    id=str(uuid.uuid4()),
+                    created_at=datetime.now(timezone.utc),
+                    embedding_model=embedding_model,
+                    threshold=threshold,
+                    top_similarity=top_similarity,
+                    choice="abandoned",
+                    fingerprint=fingerprint,
+                    top_key=top_key,
+                )
+            )
+
+    def resolve_near_duplicate(self, fingerprint: str, choice: str) -> None:
+        stmt = (
+            update(memory_near_duplicate_log_table)
+            .where(memory_near_duplicate_log_table.c.fingerprint == fingerprint)
+            .where(memory_near_duplicate_log_table.c.choice == "abandoned")
+            .values(choice=choice)
+        )
+        with self.engine.begin() as conn:
+            conn.execute(stmt)
 
     def hide_memory(self, memory_id: str) -> None:
         stmt = (
