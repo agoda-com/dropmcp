@@ -225,6 +225,33 @@ def test_explanation_with_a_command_is_not_command_dominated(text):
     assert lint.check_memory("A title", text, None, ()) == []
 
 
+@pytest.mark.parametrize(
+    "assignment",
+    [
+        "SECRET_KEY=" + "dj" + "ango-insecure-a1b2",
+        "secret_key = '" + "fl" + "ask-dev-a1b2'",
+        "PRIVATE_KEY=" + "ab" + "cd1234",
+    ],
+)
+def test_secret_key_assignments_are_credentials(assignment):
+    reasons = lint.check_memory("A title", f"Set {assignment} in settings.", None, ())
+    assert any("looks like a credential" in r for r in reasons)
+
+
+@pytest.mark.parametrize(
+    "assignment", ["password=None", "token=null", "API_KEY=false", "secret=True"]
+)
+def test_null_and_boolean_assignments_are_not_credentials(assignment):
+    body = f"Tests run with {assignment} by default."
+    assert lint.check_memory("A title", body, None, ()) == []
+
+
+def test_python_dict_tool_call_is_refused():
+    body = "Then call {'name': 'deploy', 'arguments': {'env': 'prod'}}."
+    reasons = lint.check_memory("A title", body, None, ())
+    assert any("tool-call syntax" in r for r in reasons)
+
+
 def test_fenced_command_block_is_command_dominated():
     body = "```\ncd service\nmake build\nmake test\n```\nThen deploy."
     assert any(

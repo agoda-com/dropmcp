@@ -9,8 +9,11 @@ from collections.abc import Callable, Sequence
 
 LintRule = Callable[[str], str | None]
 
-_PLACEHOLDER = r"(?![$<{*%])"
-_SECRET_NAME = r"\w*(?:password|passwd|secret|token|api_?key|access_?key)"
+_PLACEHOLDER = r"(?![$<{*%]|(?:none|null|nil|true|false)\b)"
+_SECRET_NAME = (
+    r"\w*(?:password|passwd|secret(?:_?key)?|private_?key|token|api_?key"
+    r"|access_?key)"
+)
 
 _SECRET_PATTERNS = tuple(
     re.compile(pattern)
@@ -42,8 +45,8 @@ _TOOL_CALL = re.compile(
     r"(?i)</?\s*(?:tool_call|function_calls)\b|<\s*invoke\b"
     r"|\bfunctions\.\w+\s*\("
 )
-_JSON_NAME = re.compile(r"\"name\"\s*:")
-_JSON_ARGUMENTS = re.compile(r"\"arguments\"\s*:")
+_JSON_NAME = re.compile(r"[\"']name[\"']\s*:")
+_JSON_ARGUMENTS = re.compile(r"[\"']arguments[\"']\s*:")
 
 _COMMAND_BINARIES = frozenset(
     {
