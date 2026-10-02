@@ -1,0 +1,18 @@
+"""Opt-in shared agent memory: remember, recall and report, behind a flag."""
+
+from __future__ import annotations
+
+from fastmcp import FastMCP
+
+from dropmcp.config import Settings
+from dropmcp.memory.provider import MemoryProvider
+from dropmcp.memory.store import MemoryStore
+from dropmcp.memory.vocabulary import resolve_vocabulary
+
+
+def register_memory(mcp: FastMCP, settings: Settings) -> None:
+    if not settings.memory_enabled:
+        return
+    store = settings.memory_store or MemoryStore(settings.database_url)
+    vocabulary = resolve_vocabulary(settings.memory_vocabulary)
+    mcp.add_provider(MemoryProvider(store, settings, vocabulary))

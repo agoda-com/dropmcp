@@ -29,6 +29,7 @@ from dropmcp.eval_results import EvalResultsStore, resolve_mysql_store, result_v
 from dropmcp.feedback import FeedbackProvider, FeedbackStore, feedback_to_dict
 from dropmcp.identity import user_from_request
 from dropmcp.instructions import build_server_instructions
+from dropmcp.memory import register_memory
 from dropmcp.middleware import TelemetryMiddleware
 from dropmcp.prompts import PromptsDirectoryProvider
 from dropmcp.repo_feedback import (
@@ -176,6 +177,7 @@ def build_server(settings: Settings) -> FastMCP:
         settings.prompts_dir,
         feedback_enabled=settings.feedback_enabled,
         repo_feedback_enabled=settings.repo_feedback_enabled,
+        memory_enabled=settings.memory_enabled,
     )
 
     mcp = FastMCP(
@@ -252,6 +254,8 @@ def build_server(settings: Settings) -> FastMCP:
     )
     if repo_feedback_store is not None:
         mcp.add_provider(RepoFeedbackProvider(repo_feedback_store))
+
+    register_memory(mcp, settings)
 
     if settings.ui_enabled:
         eval_store = _resolve_eval_results_store(settings)
@@ -378,6 +382,7 @@ def _register_catalog_routes(
             "available_groups": available_groups,
             "feedback_enabled": settings.feedback_enabled,
             "repo_feedback_enabled": settings.repo_feedback_enabled,
+            "memory_enabled": settings.memory_enabled,
             "benchmarks_enabled": benchmark_service is not None,
         }
         return JSONResponse(payload)

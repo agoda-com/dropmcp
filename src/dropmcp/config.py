@@ -13,14 +13,18 @@ multiple remote clients, so there is no local stdio transport to configure.
 from __future__ import annotations
 
 import os
+from collections.abc import Sequence
 from dataclasses import dataclass
 from importlib import resources
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from dropmcp.benchmarks import BenchmarkResultsStore
     from dropmcp.eval_results import EvalResultsStore
+    from dropmcp.memory.lint import LintRule
+    from dropmcp.memory.store import MemoryStore
+    from dropmcp.memory.vectors import MemoryEmbedder
 
 _TRUE = {"1", "true", "yes", "on"}
 _FALSE = {"0", "false", "no", "off"}
@@ -37,6 +41,7 @@ DEFAULT_CATALOG_DEFAULTS_RESOURCE = "static/catalog-defaults"
 DEFAULT_DATABASE_FILENAME = "dropmcp.db"
 DEFAULT_USER_HEADER = "X-User-Email"
 COMMIT_SHA_FILENAME = "COMMIT_SHA"
+DEFAULT_MEMORY_CANDIDATE_CAP = 500
 
 
 def _env(name: str) -> str | None:
@@ -153,6 +158,15 @@ def _resolve_icon_path(
     return _packaged_default_icon()
 
 
+def _resolve_memory_vocabulary(
+    explicit: str | Path | dict[str, Any] | None,
+) -> Path | dict[str, Any] | None:
+    chosen = _first(explicit, _env("DROPMCP_MEMORY_VOCABULARY"))
+    if chosen is None or isinstance(chosen, dict):
+        return chosen
+    return Path(chosen)
+
+
 @dataclass(frozen=True)
 class Settings:
     skills_dir: Path
@@ -176,6 +190,12 @@ class Settings:
     eval_results_store: EvalResultsStore | None
     benchmarks_enabled: bool
     benchmark_results_store: BenchmarkResultsStore | None
+    memory_enabled: bool
+    memory_embedder: MemoryEmbedder | None
+    memory_vocabulary: Path | dict[str, Any] | None
+    memory_lint_rules: tuple[LintRule, ...]
+    memory_store: MemoryStore | None
+    memory_candidate_cap: int
 
     @classmethod
     def resolve(
@@ -202,6 +222,12 @@ class Settings:
         eval_results_store: EvalResultsStore | None = None,
         benchmarks_enabled: bool | None = None,
         benchmark_results_store: BenchmarkResultsStore | None = None,
+        memory_enabled: bool | None = None,
+        memory_embedder: MemoryEmbedder | None = None,
+        memory_vocabulary: str | Path | dict[str, Any] | None = None,
+        memory_lint_rules: Sequence[LintRule] | None = None,
+        memory_store: MemoryStore | None = None,
+        memory_candidate_cap: int | None = None,
     ) -> "Settings":
         skills_dir = Path(
             _first(skills, _env("DROPMCP_SKILLS"), DEFAULT_SKILLS_DIR)
@@ -257,4 +283,18 @@ class Settings:
                 benchmarks_enabled, _env_bool("DROPMCP_BENCHMARKS"), False
             ),
             benchmark_results_store=benchmark_results_store,
+            memory_enabled=_first(
+                memory_enabled, _env_bool("DROPMCP_MEMORY"), False
+            ),
+            memory_embedder=memory_embedder,
+            memory_vocabulary=_resolve_memory_vocabulary(memory_vocabulary),
+            memory_lint_rules=tuple(memory_lint_rules or ()),
+            memory_store=memory_store,
+            memory_candidate_cap=int(
+                _first(
+                    memory_candidate_cap,
+                    _env("DROPMCP_MEMORY_CANDIDATE_CAP"),
+                    DEFAULT_MEMORY_CANDIDATE_CAP,
+                )
+            ),
         )
