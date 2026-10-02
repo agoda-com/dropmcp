@@ -159,16 +159,27 @@ class MemoryRememberTool(Tool):
         if problems:
             return "Memory not stored: " + " ".join(problems)
 
-        reasons = lint.check_memory(
-            title, body, evidence, self._settings.memory_lint_rules
-        )
+        reasons = [
+            *lint.check_memory(
+                title, body, evidence, self._settings.memory_lint_rules
+            ),
+            *lint.check_context(context, self._settings.memory_lint_rules),
+        ]
         if reasons:
             return "Memory not stored: " + " ".join(reasons)
 
+        supersedes_key = _optional_text(arguments, "supersedes")
+        superseded = None
+        if supersedes_key is not None:
+            superseded = self._resolve_key(supersedes_key)
+            if superseded is None:
+                return _unknown_key("supersedes", supersedes_key)
+
         fingerprint = make_memory_fingerprint(context, title)
-        existing = self._store.find_active_by_fingerprint(fingerprint)
-        if existing is not None:
-            return _already_known(self._store.confirm_memory(existing["id"]))
+        if superseded is None:
+            existing = self._store.find_active_by_fingerprint(fingerprint)
+            if existing is not None:
+                return _already_known(self._store.confirm_memory(existing["id"]))
 
         same_as_key = _optional_text(arguments, "same_as")
         if same_as_key is not None:
@@ -177,13 +188,6 @@ class MemoryRememberTool(Tool):
                 return _unknown_key("same_as", same_as_key)
             self._store.resolve_near_duplicate(fingerprint, "same_as")
             return _already_known(self._store.confirm_memory(same_as["id"]))
-
-        supersedes_key = _optional_text(arguments, "supersedes")
-        superseded = None
-        if supersedes_key is not None:
-            superseded = self._resolve_key(supersedes_key)
-            if superseded is None:
-                return _unknown_key("supersedes", supersedes_key)
 
         embedder = self._settings.memory_embedder
         vectors = safe_embed(embedder, [embed_text(title, body, context)])

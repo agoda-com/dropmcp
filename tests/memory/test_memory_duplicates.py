@@ -47,7 +47,7 @@ async def test_same_title_and_scope_twice_confirms_instead_of_copying(
         second = await mem.remember(
             context={"repo": REPO.upper()},
             kind="gotcha",
-            title="  build takes 45   seconds on a cold CACHE ",
+            title="  build takes 300   seconds on a cold CACHE ",
             body="A different body does not matter.",
         )
 
@@ -120,6 +120,87 @@ async def test_supersedes_replaces_the_old_memory_in_recall(backend, memory_serv
         assert old["status"] == "superseded"
         assert old["superseded_by"] == new["id"]
         assert new["status"] == "active"
+
+
+async def test_titles_that_differ_only_by_a_number_are_different_memories(
+    backend, memory_server
+):
+    async with memory_server() as mem:
+        node18 = await mem.remember(
+            context={"repo": REPO},
+            kind="setup",
+            title="Build requires Node 18",
+            body="Install Node 18 before building.",
+        )
+        node20 = await mem.remember(
+            context={"repo": REPO},
+            kind="setup",
+            title="Build requires Node 20",
+            body="Install Node 20 before building.",
+        )
+
+        assert node18.startswith("Remembered")
+        assert node20.startswith("Remembered")
+        assert [row["occurrence_count"] for row in _memories(mem)] == [1, 1]
+
+
+async def test_supersedes_with_a_title_that_differs_only_by_a_number(
+    backend, memory_server
+):
+    async with memory_server() as mem:
+        old_key = _keys(
+            await mem.remember(
+                context={"repo": REPO},
+                kind="setup",
+                title="Build requires Node 18",
+                body="Install Node 18 before building.",
+            )
+        )[0]
+
+        result = await mem.remember(
+            context={"repo": REPO},
+            kind="setup",
+            title="Build requires Node 20",
+            body="Install Node 20 before building.",
+            supersedes=old_key,
+        )
+
+        new_key = next(key for key in _keys(result) if key != old_key)
+        assert result == f"Remembered [{new_key}]; it supersedes [{old_key}]."
+        recalled = await mem.recall(context={"repo": REPO})
+        assert new_key in recalled
+        assert old_key not in recalled
+        old = mem.sql("SELECT * FROM memory WHERE key = :key", key=old_key)[0]
+        assert old["status"] == "superseded"
+        assert old["occurrence_count"] == 1
+
+
+async def test_supersedes_with_the_same_title_replaces_instead_of_confirming(
+    backend, memory_server
+):
+    async with memory_server() as mem:
+        old_key = _keys(
+            await mem.remember(
+                context={"repo": REPO},
+                kind="setup",
+                title="Local runs need the queue emulator",
+                body="Start the emulator on port 5672.",
+            )
+        )[0]
+
+        result = await mem.remember(
+            context={"repo": REPO},
+            kind="setup",
+            title="Local runs need the queue emulator",
+            body="Start the emulator on port 5673; 5672 is taken by the broker.",
+            supersedes=old_key,
+        )
+
+        new_key = next(key for key in _keys(result) if key != old_key)
+        assert result == f"Remembered [{new_key}]; it supersedes [{old_key}]."
+        old = mem.sql("SELECT * FROM memory WHERE key = :key", key=old_key)[0]
+        assert old["status"] == "superseded"
+        assert old["occurrence_count"] == 1
 
 
 async def test_unknown_supersedes_key_is_refused_and_nothing_stored(

@@ -40,7 +40,7 @@ from dropmcp.memory import keyword
 from dropmcp.memory.context import SCOPE_FIELDS, MemoryContext
 from dropmcp.memory.keys import new_key
 from dropmcp.memory.vectors import MemoryEmbedder, embed_text, pack, safe_embed
-from dropmcp.repo_feedback import _format_datetime, _normalize_fingerprint_part
+from dropmcp.repo_feedback import _format_datetime
 
 logger = logging.getLogger(__name__)
 
@@ -170,11 +170,16 @@ memory_near_duplicate_log_table = Table(
 )
 
 
+def normalize_fingerprint_part(value: str) -> str:
+    # Digits stay: in a memory the number is often the fact (Node 18 vs Node 20).
+    return " ".join(value.lower().split())
+
+
 def make_memory_fingerprint(context: MemoryContext, title: str) -> str:
     parts = [
-        _normalize_fingerprint_part(getattr(context, field)) for field in SCOPE_FIELDS
+        normalize_fingerprint_part(getattr(context, field)) for field in SCOPE_FIELDS
     ]
-    parts.append(_normalize_fingerprint_part(title))
+    parts.append(normalize_fingerprint_part(title))
     return hashlib.sha256("|".join(parts).encode("utf-8")).hexdigest()
 
 
