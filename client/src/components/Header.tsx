@@ -1,6 +1,7 @@
 import { useCatalog } from '../context/CatalogContext';
 import { Link } from 'react-router-dom';
 import type { ReactNode } from 'react';
+import MemoryNavLink from './memory/MemoryNavLink';
 import styles from './Header.module.css';
 
 export default function Header() {
@@ -27,6 +28,7 @@ export default function Header() {
           <p>
             Browse skills and prompts for AI agents
             {links.length > 0 && <> · {joinLinks(links)}</>}
+            <MemoryNavLink />
           </p>
         </div>
       </div>

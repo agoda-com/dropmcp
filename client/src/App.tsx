@@ -8,6 +8,7 @@ import DetailPage from './pages/DetailPage';
 import FeedbackPage from './pages/FeedbackPage';
 import RepoFeedbackPage from './pages/RepoFeedbackPage';
 import BenchmarksPage from './pages/BenchmarksPage';
+import MemoryPage from './pages/MemoryPage';
 
 const queryClient = new QueryClient();
 
@@ -22,6 +23,7 @@ export default function App() {
             <Route path="/feedback" element={<FeedbackPage />} />
             <Route path="/repo-feedback" element={<RepoFeedbackPage />} />
             <Route path="/benchmarks" element={<BenchmarksPage />} />
+            <Route path="/memory" element={<MemoryPage />} />
             <Route path="/:type/:name" element={<DetailPage />} />
           </Routes>
           <Footer />

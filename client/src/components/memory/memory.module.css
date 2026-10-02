@@ -1,0 +1,155 @@
+.stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+}
+
+.statCard,
+.row,
+.details,
+.report,
+.openReports {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: 1rem 1.15rem;
+  box-shadow: var(--color-shadow);
+}
+
+.statCard h3,
+.details h3,
+.openReports h3 {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+}
+
+.statCard p,
+.meta,
+.report p {
+  margin: 0.2rem 0;
+  color: var(--color-text-muted);
+  font-size: 0.875rem;
+}
+
+.statCard strong {
+  color: var(--color-text);
+  font-weight: 650;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.75rem;
+}
+
+.rowSelected {
+  composes: row;
+  border-color: var(--color-primary);
+}
+
+.titleButton {
+  border: 0;
+  background: transparent;
+  color: var(--color-text);
+  font: inherit;
+  font-weight: 650;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+}
+
+.titleButton:hover {
+  color: var(--color-primary);
+}
+
+.hiddenBadge {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  background: rgba(255, 41, 56, 0.12);
+  color: var(--brand-red);
+}
+
+.details,
+.openReports {
+  margin-top: 1.25rem;
+}
+
+.details h4 {
+  margin: 1rem 0 0.5rem;
+  font-size: 0.95rem;
+}
+
+.body {
+  margin: 0.75rem 0 0;
+  white-space: pre-wrap;
+}
+
+.reports {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.reportTitle {
+  margin: 0 0 0.25rem;
+  color: var(--color-text);
+  font-weight: 650;
+}
+
+.deleteRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+.deleteRow p {
+  margin: 0;
+}
+
+.danger,
+.secondary {
+  border-radius: var(--radius-md);
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: 600;
+  padding: 0.45rem 0.8rem;
+  cursor: pointer;
+}
+
+.danger {
+  border: 1px solid var(--brand-red);
+  background: var(--brand-red);
+  color: #fff;
+}
+
+.secondary {
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+
+.empty,
+.loading,
+.error {
+  text-align: center;
+  padding: 2rem 1rem;
+  color: var(--color-text-muted);
+}
+
+.error {
+  color: var(--brand-red);
+}

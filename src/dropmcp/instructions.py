@@ -30,6 +30,7 @@ SKILLS_PLACEHOLDER = "{{INSTRUCTION_SUMMARIES}}"
 PROMPTS_PLACEHOLDER = "{{PROMPT_SUMMARIES}}"
 FEEDBACK_SECTION_RESOURCE = "feedback_instructions.md"
 REPO_FEEDBACK_SECTION_RESOURCE = "repo_feedback_instructions.md"
+MEMORY_SECTION_RESOURCE = "memory/memory_instructions.md"
 
 
 def _packaged_section(resource_name: str) -> str:
@@ -47,16 +48,24 @@ def _repo_feedback_section() -> str:
     return _packaged_section(REPO_FEEDBACK_SECTION_RESOURCE)
 
 
+def _memory_section() -> str:
+    """The always-on shared memory guidance packaged with dropmcp."""
+    return _packaged_section(MEMORY_SECTION_RESOURCE)
+
+
 def _enabled_sections(
     *,
     feedback_enabled: bool,
     repo_feedback_enabled: bool,
+    memory_enabled: bool,
 ) -> list[str]:
     sections: list[str] = []
     if feedback_enabled:
         sections.append(_feedback_section())
     if repo_feedback_enabled:
         sections.append(_repo_feedback_section())
+    if memory_enabled:
+        sections.append(_memory_section())
     return sections
 
 _FRONTMATTER_RE = re.compile(r"^---\s*\n(.*?)\n---\s*\n", re.DOTALL)
@@ -122,6 +131,7 @@ def build_server_instructions(
     *,
     feedback_enabled: bool = False,
     repo_feedback_enabled: bool = False,
+    memory_enabled: bool = False,
 ) -> str | None:
     """Read `INSTRUCTIONS.md` and substitute the summaries placeholders.
 
@@ -135,6 +145,7 @@ def build_server_instructions(
     sections = _enabled_sections(
         feedback_enabled=feedback_enabled,
         repo_feedback_enabled=repo_feedback_enabled,
+        memory_enabled=memory_enabled,
     )
     template = (
         template_path.read_text(encoding="utf-8").strip()

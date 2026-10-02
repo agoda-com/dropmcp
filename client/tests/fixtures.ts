@@ -1,5 +1,11 @@
 import type { CatalogItem } from '../src/api/catalog';
 import type { FeedbackItem } from '../src/api/feedback';
+import type {
+  MemoryDetail,
+  MemoryListItem,
+  MemoryReport,
+  MemoryStatsPeriod,
+} from '../src/api/memory';
 import type { RepoFeedbackItem } from '../src/api/repoFeedback';
 
 export const MOCK_ITEMS: CatalogItem[] = [
@@ -162,5 +168,108 @@ export const MOCK_REPO_FEEDBACK: RepoFeedbackItem[] = [
     occurrence_count: 2,
     status: 'triaged',
     resolution_url: 'https://github.com/agoda-com/dropmcp/issues/34',
+  },
+];
+
+export const MOCK_MEMORIES: MemoryListItem[] = [
+  {
+    key: 'MEM-PAY001',
+    title: 'Validation stays HTTP 200',
+    kind: 'gotcha',
+    status: 'active',
+    repo: 'example-org/payments-api',
+    language: 'csharp',
+    scope: 'example-org/payments-api · csharp',
+    confirmations: 3,
+    confirmations_label: '3 confirmations',
+    open_reports: 1,
+    open_reports_label: '1 open report',
+    hidden: false,
+    hidden_label: null,
+    display_created_at: '2026-10-01 09:00:00',
+    display_confirmed_at: '2026-10-02 09:00:00',
+  },
+  {
+    key: 'MEM-LED002',
+    title: 'Ledger rounds half away from zero',
+    kind: 'convention',
+    status: 'active',
+    repo: 'example-org/ledger',
+    language: 'python',
+    scope: 'example-org/ledger · python',
+    confirmations: 1,
+    confirmations_label: '1 confirmation',
+    open_reports: 0,
+    open_reports_label: '0 open reports',
+    hidden: true,
+    hidden_label: 'Hidden',
+    display_created_at: '2026-10-01 08:00:00',
+    display_confirmed_at: '2026-10-01 08:00:00',
+  },
+];
+
+export const MOCK_MEMORY_REPORTS: MemoryReport[] = [
+  {
+    id: 'rep-1',
+    problem: 'stale',
+    problem_label: 'stale',
+    reason: 'The status is now 422.',
+    correction: null,
+    status: 'open',
+    reported_key: 'MEM-PAY001',
+    memory_key: 'MEM-PAY001',
+    described_memory: null,
+    candidate_keys: [],
+    candidate_keys_label: null,
+    keyed: true,
+    link_label: 'MEM-PAY001',
+    display_created_at: '2026-10-02 10:00:00',
+  },
+  {
+    id: 'rep-2',
+    problem: 'invalid',
+    problem_label: 'invalid',
+    reason: 'Retries are not always safe.',
+    correction: null,
+    status: 'open',
+    reported_key: null,
+    memory_key: null,
+    described_memory: 'Retries are always safe.',
+    candidate_keys: ['MEM-PAY001'],
+    candidate_keys_label: 'MEM-PAY001',
+    keyed: false,
+    link_label: 'Unkeyed',
+    display_created_at: '2026-10-02 11:00:00',
+  },
+];
+
+export const MOCK_MEMORY_DETAIL: MemoryDetail = {
+  ...MOCK_MEMORIES[0],
+  body: 'Check the error body; the status code stays 200.',
+  evidence: 'A failing request still answered 200.',
+};
+
+export const MOCK_MEMORY_STATS: MemoryStatsPeriod[] = [
+  {
+    days: 7,
+    label: 'Last 7 days',
+    recall_count: 4,
+    recalls_with_results: 2,
+    recalls_without_results: 2,
+    share_returning: '50%',
+    report_count: 2,
+    reports_per_recall: '0.5',
+    distinct_writers: 2,
+  },
+  {
+    days: 30,
+    label: 'Last 30 days',
+    recall_count: 10,
+    recalls_with_results: 4,
+    recalls_without_results: 6,
+    share_returning: '40%',
+    report_count: 3,
+    reports_per_recall: '0.3',
+    distinct_writers: 3,
   },
 ];

@@ -9,6 +9,18 @@ on:
 jobs:
   test-python:
     runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: pg
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 15
     steps:
       - uses: actions/checkout@v4
 
@@ -29,7 +41,7 @@ jobs:
           python-version: "3.12"
 
       - name: Install package
-        run: pip install -e ".[dev,otel]"
+        run: pip install -e ".[dev,otel,memory]"
 
       - name: Verify SPA is packaged
         run: |
@@ -44,6 +56,8 @@ jobs:
         run: ruff check src
 
       - name: pytest
+        env:
+          DROPMCP_TEST_POSTGRES_URL: postgresql+psycopg://postgres:pg@localhost:5432/postgres
         run: pytest
 
   test-ui:
@@ -96,6 +110,9 @@ jobs:
 
       - name: Build wheel
         run: pip install build && python -m build
+
+      - name: Verify memory SQL is packaged
+        run: python -m zipfile -l dist/*.whl | grep -q "dropmcp/memory/sql/memory.sql"
 
       - name: Upload wheel artifact
         uses: actions/upload-artifact@v4

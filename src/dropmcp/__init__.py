@@ -52,6 +52,12 @@ def create_server(
     eval_results_store=None,
     benchmarks_enabled: bool | None = None,
     benchmark_results_store=None,
+    memory_enabled: bool | None = None,
+    memory_embedder=None,
+    memory_vocabulary=None,
+    memory_lint_rules=None,
+    memory_store=None,
+    memory_candidate_cap: int | None = None,
 ) -> FastMCP:
     """Build and return a configured `FastMCP` server without running it.
 
@@ -79,6 +85,12 @@ def create_server(
         eval_results_store=eval_results_store,
         benchmarks_enabled=benchmarks_enabled,
         benchmark_results_store=benchmark_results_store,
+        memory_enabled=memory_enabled,
+        memory_embedder=memory_embedder,
+        memory_vocabulary=memory_vocabulary,
+        memory_lint_rules=memory_lint_rules,
+        memory_store=memory_store,
+        memory_candidate_cap=memory_candidate_cap,
     )
     return build_server(settings)
 
@@ -104,6 +116,12 @@ def run(
     eval_results_store=None,
     benchmarks_enabled: bool | None = None,
     benchmark_results_store=None,
+    memory_enabled: bool | None = None,
+    memory_embedder=None,
+    memory_vocabulary=None,
+    memory_lint_rules=None,
+    memory_store=None,
+    memory_candidate_cap: int | None = None,
 ) -> None:
     """Build the server and serve it over streamable-HTTP.
 
@@ -131,6 +149,12 @@ def run(
         eval_results_store=eval_results_store,
         benchmarks_enabled=benchmarks_enabled,
         benchmark_results_store=benchmark_results_store,
+        memory_enabled=memory_enabled,
+        memory_embedder=memory_embedder,
+        memory_vocabulary=memory_vocabulary,
+        memory_lint_rules=memory_lint_rules,
+        memory_store=memory_store,
+        memory_candidate_cap=memory_candidate_cap,
     )
     mcp = build_server(settings)
 
