@@ -424,6 +424,10 @@ All three also take the calling `model`, as `record_feedback` does. Each memory
 has a short key such as `MEM-7K3F9Q`, with a check character so a mangled key is
 detected rather than matched to the wrong memory.
 
+An optional agent skill with the same guidance as the always-on instructions
+block ships in [`examples/skills/shared-memory`](examples/skills/shared-memory/SKILL.md);
+copy it into your `skills/` folder to serve it.
+
 ### Parameters
 
 | kwarg | env | default | purpose |
@@ -440,6 +444,19 @@ is scored in-process over the filtered candidates, so no vector extension is
 needed on any database. Install `dropmcp[memory]` to score with numpy; without
 it a pure-Python fallback is used. If the embedder fails, the memory is still
 stored and found by keyword search.
+
+Rows with no embedding, or one from a different model or dimension, are skipped
+by vector scoring until they are backfilled. Changing embedder model is a
+backfill, not a migration. Run it from a scheduled job or at startup:
+
+```python
+from dropmcp.memory.store import MemoryStore
+
+embedded = MemoryStore(database_url).backfill_embeddings(embedder)
+```
+
+It embeds active memories in batches (`batch_size=100`) and stops at the first
+failed batch, leaving the rest for the next run.
 
 ### Storage
 
@@ -474,7 +491,8 @@ they can, that memory and report text must not contain:
   compensation, leave, health), or people and team moves
 - verbatim proprietary code beyond a line or two, or verbatim user prompts
 - confidential business information that isn't engineering knowledge
-- local filesystem paths and machine-specific detail
+- local filesystem paths and machine-specific detail (home-directory paths are
+  refused)
 
 The checks also refuse text addressed to the reading agent ("ignore previous",
 "you must", tool-call syntax) and bodies that are mostly a command to run. The
