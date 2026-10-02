@@ -112,10 +112,9 @@ def test_numpy_and_python_rank_the_same_inputs(monkeypatch):
 
 
 async def test_paraphrase_is_recalled_only_with_an_embedder(memory_server):
-    # Search keeps every in-scope row when both ranked lists are empty, and
-    # reciprocal-rank scores sit so close that a scope or quality edge beats
-    # vector order. The distractor has no embedding and more confirmations,
-    # so limit 1 hides the paraphrase until vector ranking replaces that list.
+    # The distractor has no embedding and more confirmations, so a scope-only
+    # fallback at limit 1 hides the paraphrase. A no-hit query that returns
+    # nothing hides it too. Either way the embedder has to surface the target.
     async with memory_server(memory_embedder=FailingEmbedder()) as failing:
         distractor = await _remember(failing, title=_DISTRACTOR, body=_DISTRACTOR)
         _update(failing, distractor, occurrence_count=2, last_confirmed_at=_STAMP)
@@ -132,7 +131,6 @@ async def test_paraphrase_is_recalled_only_with_an_embedder(memory_server):
         missed = await plain.recall(context=_CONTEXT, query=_QUERY, limit=1)
 
         assert target not in missed
-        assert distractor in missed
 
 
 async def test_hybrid_merge_returns_keyword_and_vector_hits(memory_server, monkeypatch):
