@@ -13,6 +13,14 @@ from dropmcp.memory.context import MemoryContext
 
 logger = logging.getLogger(__name__)
 
+try:
+    import numpy as _numpy
+except ImportError:
+    _numpy = None
+
+# Tests force the pure-Python scorer by monkeypatching this flag.
+use_numpy = _numpy is not None
+
 
 @dataclass(frozen=True)
 class MemoryEmbedder:
@@ -31,9 +39,42 @@ def unpack(data: bytes) -> list[float]:
 
 
 def cosine(a: Sequence[float], b: Sequence[float]) -> float:
+    if _numpy_enabled():
+        return _cosine_numpy(a, b)
+    return _cosine_python(a, b)
+
+
+def _numpy_enabled() -> bool:
+    return bool(use_numpy) and _numpy is not None
+
+
+def _cosine_python(a: Sequence[float], b: Sequence[float]) -> float:
     dot = sum(x * y for x, y in zip(a, b))
     norm = math.sqrt(sum(x * x for x in a)) * math.sqrt(sum(y * y for y in b))
     return dot / norm if norm else 0.0
+
+
+def _cosine_numpy(a: Sequence[float], b: Sequence[float]) -> float:
+    left = _numpy.asarray(a, dtype=_numpy.float64)
+    right = _numpy.asarray(b, dtype=_numpy.float64)
+    denom = float(_numpy.linalg.norm(left) * _numpy.linalg.norm(right))
+    if denom == 0.0:
+        return 0.0
+    return float(_numpy.dot(left, right) / denom)
+
+
+def _batch_cosine(query: Sequence[float], rows: list[list[float]]) -> list[float]:
+    if not rows:
+        return []
+    if _numpy_enabled():
+        matrix = _numpy.asarray(rows, dtype=_numpy.float64)
+        query_vec = _numpy.asarray(query, dtype=_numpy.float64)
+        dots = matrix @ query_vec
+        denom = _numpy.linalg.norm(matrix, axis=1) * _numpy.linalg.norm(query_vec)
+        scores = _numpy.zeros(len(rows), dtype=_numpy.float64)
+        _numpy.divide(dots, denom, out=scores, where=denom != 0)
+        return [float(score) for score in scores]
+    return [_cosine_python(query, row) for row in rows]
 
 
 def embed_text(title: str, body: str, context: MemoryContext) -> str:
@@ -65,5 +106,36 @@ def vector_ranked(
     context: MemoryContext,
     embedder: MemoryEmbedder | None,
 ) -> list[str]:
-    # TODO(S5): cosine of the query embedding against each candidate, best first.
-    return []
+    if embedder is None or query is None or not query.strip():
+        return []
+    embedded = safe_embed(embedder, [query])
+    if not embedded:
+        return []
+    scored: list[tuple[str, list[float]]] = []
+    for row in candidates:
+        vector = _stored_vector(row, embedder)
+        if vector is not None:
+            scored.append((row["id"], vector))
+    if not scored:
+        return []
+    similarities = _batch_cosine(embedded[0], [vector for _, vector in scored])
+    order = sorted(
+        range(len(scored)), key=lambda index: similarities[index], reverse=True
+    )
+    return [scored[index][0] for index in order]
+
+
+def _stored_vector(
+    row: dict[str, Any], embedder: MemoryEmbedder
+) -> list[float] | None:
+    if row.get("embedding_model") != embedder.model:
+        return None
+    if row.get("embedding_dim") != embedder.dimension:
+        return None
+    raw = row.get("embedding")
+    if raw is None:
+        return None
+    data = raw.tobytes() if isinstance(raw, memoryview) else bytes(raw)
+    if len(data) != embedder.dimension * 4:
+        return None
+    return unpack(data)
