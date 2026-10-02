@@ -6,10 +6,10 @@ import json
 from dataclasses import dataclass, fields
 from typing import Any
 
-from dropmcp.memory.vocabulary import Vocabulary, normalise_stack
+from dropmcp.memory.vocabulary import Vocabulary, check_context_text, normalise_stack
 
 SCOPE_FIELDS = ("repo", "system", "language", "domain")
-_TEXT_FIELDS = ("repo", "system", "language", "domain", "task", "path")
+TEXT_FIELDS = ("repo", "system", "language", "domain", "task", "path")
 _LOWERCASE_FIELDS = ("repo", "system", "language", "domain", "task")
 
 
@@ -38,15 +38,22 @@ class MemoryContext:
             )
 
         values: dict[str, Any] = {}
-        for name in _TEXT_FIELDS:
+        for name in TEXT_FIELDS:
             value = raw.get(name)
             if value is None:
                 continue
             if not isinstance(value, str):
                 raise ValueError(f"context.{name} must be a string.")
             value = value.strip()
+            check_context_text(f"context.{name}", value)
             values[name] = value.lower() if name in _LOWERCASE_FIELDS else value
 
+        domain = values.get("domain")
+        if domain and vocabulary.domains and domain not in vocabulary.domains:
+            raise ValueError(
+                f"context.domain '{domain}' is not known. "
+                f"Use one of: {', '.join(vocabulary.domains)}."
+            )
         language = values.get("language")
         if language and language not in vocabulary.languages:
             raise ValueError(
@@ -71,7 +78,7 @@ class MemoryContext:
             return cls()
         data = json.loads(text)
         values: dict[str, Any] = {
-            name: str(data[name]) for name in _TEXT_FIELDS if data.get(name)
+            name: str(data[name]) for name in TEXT_FIELDS if data.get(name)
         }
         values["stack"] = tuple(str(tag) for tag in data.get("stack") or ())
         return cls(**values)

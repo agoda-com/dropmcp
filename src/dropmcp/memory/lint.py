@@ -7,6 +7,8 @@ import re
 from collections import Counter
 from collections.abc import Callable, Sequence
 
+from dropmcp.memory.context import TEXT_FIELDS, MemoryContext
+
 LintRule = Callable[[str], str | None]
 
 _PLACEHOLDER = r"(?![$<{*%]|(?:none|null|nil|true|false)\b)"
@@ -167,6 +169,17 @@ def check_memory(
         *_check_field("body", body, extra_rules, commands=True),
         *_check_field("evidence", evidence, extra_rules),
     ]
+
+
+def check_context(
+    context: MemoryContext, extra_rules: Sequence[LintRule]
+) -> list[str]:
+    reasons: list[str] = []
+    for name in TEXT_FIELDS:
+        reasons += _check_field(f"context.{name}", getattr(context, name), extra_rules)
+    for tag in context.stack:
+        reasons += _check_field("context.stack", tag, extra_rules)
+    return reasons
 
 
 def check_report(

@@ -14,6 +14,8 @@ logger = logging.getLogger(__name__)
 
 _logged_unknown_stack_tags: set[str] = set()
 
+MAX_CONTEXT_CHARS = 256
+
 
 @dataclass(frozen=True)
 class Vocabulary:
@@ -135,6 +137,14 @@ def resolve_vocabulary(raw: Any) -> Vocabulary:
     raise TypeError(f"unsupported memory vocabulary type: {type(raw).__name__}")
 
 
+def check_context_text(name: str, value: str) -> None:
+    # Recall prints context on its own "scope:" line; a newline would forge lines.
+    if len(value) > MAX_CONTEXT_CHARS:
+        raise ValueError(f"{name} must be at most {MAX_CONTEXT_CHARS} characters.")
+    if not value.isprintable():
+        raise ValueError(f"{name} must be one line with no control characters.")
+
+
 def normalise_stack(tags: Any, vocabulary: Vocabulary) -> tuple[str, ...]:
     if tags is None:
         return ()
@@ -148,6 +158,7 @@ def normalise_stack(tags: Any, vocabulary: Vocabulary) -> tuple[str, ...]:
         if not isinstance(tag, str):
             raise ValueError("context.stack must be a list of tags.")
         value = tag.strip().lower()
+        check_context_text("context.stack tag", value)
         if value and value not in normalised:
             if value not in known_stack and value not in _logged_unknown_stack_tags:
                 logger.info("Unknown memory stack tag: %s", value)
@@ -159,6 +170,7 @@ def normalise_stack(tags: Any, vocabulary: Vocabulary) -> tuple[str, ...]:
 def context_schema(vocabulary: Vocabulary) -> dict[str, Any]:
     domain: dict[str, Any] = {
         "type": "string",
+        "maxLength": MAX_CONTEXT_CHARS,
         "description": "Business-domain key. Omit if unsure.",
     }
     if vocabulary.domains:
@@ -172,6 +184,7 @@ def context_schema(vocabulary: Vocabulary) -> dict[str, Any]:
         "properties": {
             "repo": {
                 "type": "string",
+                "maxLength": MAX_CONTEXT_CHARS,
                 "description": (
                     "Repository as owner/name, from `git remote get-url origin`. "
                     "Omit for a memory that applies to any repo."
@@ -179,6 +192,7 @@ def context_schema(vocabulary: Vocabulary) -> dict[str, Any]:
             },
             "system": {
                 "type": "string",
+                "maxLength": MAX_CONTEXT_CHARS,
                 "description": "Component or service name. Omit if unsure.",
             },
             "language": {
@@ -188,7 +202,7 @@ def context_schema(vocabulary: Vocabulary) -> dict[str, Any]:
             },
             "stack": {
                 "type": "array",
-                "items": {"type": "string"},
+                "items": {"type": "string", "maxLength": MAX_CONTEXT_CHARS},
                 "description": (
                     "Stack tags, for example "
                     f"{', '.join(vocabulary.stack[:8])}. Unknown tags are accepted."
@@ -202,6 +216,7 @@ def context_schema(vocabulary: Vocabulary) -> dict[str, Any]:
             },
             "path": {
                 "type": "string",
+                "maxLength": MAX_CONTEXT_CHARS,
                 "description": "Folder or file inside the repo, for monorepos.",
             },
         },
