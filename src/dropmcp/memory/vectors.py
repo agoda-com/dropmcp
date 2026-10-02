@@ -57,10 +57,12 @@ def _cosine_python(a: Sequence[float], b: Sequence[float]) -> float:
 def _cosine_numpy(a: Sequence[float], b: Sequence[float]) -> float:
     left = _numpy.asarray(a, dtype=_numpy.float64)
     right = _numpy.asarray(b, dtype=_numpy.float64)
+    width = min(int(left.size), int(right.size))
+    dot = float(_numpy.dot(left[:width], right[:width]))
     denom = float(_numpy.linalg.norm(left) * _numpy.linalg.norm(right))
     if denom == 0.0:
         return 0.0
-    return float(_numpy.dot(left, right) / denom)
+    return dot / denom
 
 
 def _batch_cosine(query: Sequence[float], rows: list[list[float]]) -> list[float]:
@@ -133,9 +135,12 @@ def _stored_vector(
     if row.get("embedding_dim") != embedder.dimension:
         return None
     raw = row.get("embedding")
-    if raw is None:
+    if isinstance(raw, memoryview):
+        data = raw.tobytes()
+    elif isinstance(raw, (bytes, bytearray)):
+        data = bytes(raw)
+    else:
         return None
-    data = raw.tobytes() if isinstance(raw, memoryview) else bytes(raw)
     if len(data) != embedder.dimension * 4:
         return None
     return unpack(data)

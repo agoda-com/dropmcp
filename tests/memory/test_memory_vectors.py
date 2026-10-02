@@ -94,6 +94,23 @@ def test_vector_ranked_skips_mismatched_or_missing_embeddings():
     assert ranked == ["kept"]
 
 
+def test_numpy_and_python_cosine_agree_on_unequal_lengths(monkeypatch):
+    longer = [3.0, 4.0, 0.0]
+    shorter = [3.0]
+    monkeypatch.setattr(vectors, "use_numpy", True)
+    numpy_score = vectors.cosine(longer, shorter)
+    monkeypatch.setattr(vectors, "use_numpy", False)
+    python_score = vectors.cosine(longer, shorter)
+    assert numpy_score == pytest.approx(python_score)
+    assert numpy_score == pytest.approx(0.6)
+
+
+def test_vector_ranked_skips_a_string_embedding():
+    embedder = FakeEmbedder()
+    row = _embedded(embedder, "text", _STORED, embedding="not-bytes")
+    assert vector_ranked([row], _QUERY, MemoryContext(), embedder) == []
+
+
 def test_numpy_and_python_rank_the_same_inputs(monkeypatch):
     assert vectors.use_numpy is True
     embedder = FakeEmbedder()
