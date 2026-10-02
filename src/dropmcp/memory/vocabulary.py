@@ -2,8 +2,17 @@
 
 from __future__ import annotations
 
+import json
+import logging
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
+
+import yaml
+
+logger = logging.getLogger(__name__)
+
+_logged_unknown_stack_tags: set[str] = set()
 
 
 @dataclass(frozen=True)
@@ -74,23 +83,56 @@ DEFAULT_VOCABULARY = Vocabulary(
 _FIELDS = ("languages", "stack", "domains", "kinds", "tasks")
 
 
+def _vocabulary_from_mapping(
+    mapping: dict[str, Any], *, path: Path | None = None
+) -> Vocabulary:
+    values: dict[str, tuple[str, ...]] = {}
+    for field in _FIELDS:
+        if field not in mapping:
+            values[field] = getattr(DEFAULT_VOCABULARY, field)
+            continue
+        raw_list = mapping[field]
+        if not isinstance(raw_list, list):
+            if path is not None:
+                raise ValueError(
+                    f"memory vocabulary at {path}: key '{field}' must be a list."
+                )
+            raise ValueError(f"memory vocabulary key '{field}' must be a list.")
+        values[field] = tuple(
+            str(item).strip().lower() for item in raw_list if str(item).strip()
+        )
+    return Vocabulary(**values)
+
+
+def _load_vocabulary_file(path: Path) -> dict[str, Any]:
+    if not path.is_file():
+        raise ValueError(f"memory vocabulary file not found: {path}")
+    suffix = path.suffix.lower()
+    text = path.read_text(encoding="utf-8")
+    if suffix in (".yaml", ".yml"):
+        data = yaml.safe_load(text)
+    elif suffix == ".json":
+        data = json.loads(text)
+    else:
+        raise ValueError(
+            f"unsupported memory vocabulary file extension '{suffix}'"
+        )
+    if not isinstance(data, dict):
+        raise ValueError(f"memory vocabulary at {path} must be an object.")
+    return data
+
+
 def resolve_vocabulary(raw: Any) -> Vocabulary:
     if raw is None:
         return DEFAULT_VOCABULARY
     if isinstance(raw, Vocabulary):
         return raw
+    if isinstance(raw, (str, Path)):
+        path = Path(raw)
+        return _vocabulary_from_mapping(_load_vocabulary_file(path), path=path)
     if isinstance(raw, dict):
-        values = {
-            field: tuple(
-                str(item).strip().lower() for item in raw[field] if str(item).strip()
-            )
-            if field in raw
-            else getattr(DEFAULT_VOCABULARY, field)
-            for field in _FIELDS
-        }
-        return Vocabulary(**values)
-    # TODO(S9): load a YAML/JSON vocabulary file from a path.
-    raise NotImplementedError("Loading a memory vocabulary file is not supported yet.")
+        return _vocabulary_from_mapping(raw)
+    raise TypeError(f"unsupported memory vocabulary type: {type(raw).__name__}")
 
 
 def normalise_stack(tags: Any, vocabulary: Vocabulary) -> tuple[str, ...]:
@@ -100,14 +142,17 @@ def normalise_stack(tags: Any, vocabulary: Vocabulary) -> tuple[str, ...]:
         tags = [tags]
     if not isinstance(tags, (list, tuple)):
         raise ValueError("context.stack must be a list of tags.")
+    known_stack = set(vocabulary.stack)
     normalised: list[str] = []
     for tag in tags:
         if not isinstance(tag, str):
             raise ValueError("context.stack must be a list of tags.")
         value = tag.strip().lower()
         if value and value not in normalised:
+            if value not in known_stack and value not in _logged_unknown_stack_tags:
+                logger.info("Unknown memory stack tag: %s", value)
+                _logged_unknown_stack_tags.add(value)
             normalised.append(value)
-    # TODO(S9): log tags that are not in vocabulary.stack so the list can grow.
     return tuple(normalised)
 
 
