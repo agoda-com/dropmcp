@@ -10,7 +10,7 @@ from sqlalchemy import update
 
 from dropmcp.memory import vectors
 from dropmcp.memory.context import MemoryContext
-from dropmcp.memory.store import memory_table
+from dropmcp.memory.store import MemoryStore, memory_table
 from dropmcp.memory.vectors import pack, unpack, vector_ranked
 from fakes import FailingEmbedder, FakeEmbedder
 
@@ -210,3 +210,27 @@ async def test_failing_query_embedder_still_returns_keyword_hits(memory_server):
 
         assert key in text
         assert "could not be recalled" not in text
+
+
+async def test_backfill_embeds_missing_and_other_model_rows(memory_server):
+    async with memory_server(memory_embedder=FailingEmbedder()) as mem:
+        missing = await _remember(mem, title=_STORED, body=_STORED)
+        other = await _remember(mem, title=_DISTRACTOR, body=_DISTRACTOR)
+        _update(
+            mem,
+            other,
+            embedding=pack([1.0, 0.0]),
+            embedding_model="other-model",
+            embedding_dim=2,
+        )
+        store = MemoryStore(mem.settings.database_url)
+        embedder = FakeEmbedder()
+
+        assert store.backfill_embeddings(FailingEmbedder()) == 0
+        assert store.backfill_embeddings(embedder, batch_size=1) == 2
+        assert store.backfill_embeddings(embedder) == 0
+
+        rows = mem.sql("SELECT * FROM memory")
+        assert {row["embedding_model"] for row in rows} == {embedder.model}
+        ranked = vector_ranked(rows, _QUERY, MemoryContext(**_CONTEXT), embedder)
+        assert ranked[0] == _id(mem, missing)

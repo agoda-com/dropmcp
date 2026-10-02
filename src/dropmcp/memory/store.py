@@ -39,6 +39,7 @@ from sqlalchemy.types import TypeDecorator
 from dropmcp.memory import keyword
 from dropmcp.memory.context import SCOPE_FIELDS, MemoryContext
 from dropmcp.memory.keys import new_key
+from dropmcp.memory.vectors import MemoryEmbedder, embed_text, pack, safe_embed
 from dropmcp.repo_feedback import _format_datetime, _normalize_fingerprint_part
 
 logger = logging.getLogger(__name__)
@@ -224,6 +225,18 @@ def report_to_dict(row: Any) -> dict[str, Any]:
 
 def _optional(value: str) -> str | None:
     return value or None
+
+
+def _row_context(row: Mapping[str, Any]) -> MemoryContext:
+    return MemoryContext(
+        repo=row.get("repo") or "",
+        system=row.get("system") or "",
+        language=row.get("language") or "",
+        domain=row.get("domain") or "",
+        stack=tuple(row.get("stack") or ()),
+        task=row.get("task") or "",
+        path=row.get("path") or "",
+    )
 
 
 class MemoryStore:
@@ -435,6 +448,54 @@ class MemoryStore:
         )
         with self.engine.begin() as conn:
             conn.execute(stmt)
+
+    def backfill_embeddings(
+        self, embedder: MemoryEmbedder, batch_size: int = 100
+    ) -> int:
+        """Embed active memories with no embedding or one from another model.
+
+        Returns how many rows were embedded. Stops at the first failed batch, so
+        an unavailable embedder leaves the remaining rows for the next run.
+        """
+        table = memory_table
+        stale = or_(
+            table.c.embedding.is_(None),
+            table.c.embedding_model.is_(None),
+            table.c.embedding_model != embedder.model,
+            table.c.embedding_dim.is_(None),
+            table.c.embedding_dim != embedder.dimension,
+        )
+        stmt = (
+            select(table)
+            .where(table.c.status == "active")
+            .where(stale)
+            .order_by(table.c.created_at, table.c.id)
+        )
+        with self.engine.connect() as conn:
+            rows = [dict(row._mapping) for row in conn.execute(stmt)]
+        embedded = 0
+        for start in range(0, len(rows), batch_size):
+            batch = rows[start : start + batch_size]
+            texts = [
+                embed_text(row["title"], row["body"], _row_context(row))
+                for row in batch
+            ]
+            vectors = safe_embed(embedder, texts)
+            if vectors is None:
+                break
+            with self.engine.begin() as conn:
+                for row, vector in zip(batch, vectors):
+                    conn.execute(
+                        update(table)
+                        .where(table.c.id == row["id"])
+                        .values(
+                            embedding=pack(vector),
+                            embedding_model=embedder.model,
+                            embedding_dim=embedder.dimension,
+                        )
+                    )
+            embedded += len(batch)
+        return embedded
 
     def hide_memory(self, memory_id: str) -> None:
         stmt = (
