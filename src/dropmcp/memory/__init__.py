@@ -6,6 +6,7 @@ from fastmcp import FastMCP
 
 from dropmcp.config import Settings
 from dropmcp.memory.provider import MemoryProvider
+from dropmcp.memory.schema_check import check_memory_schema
 from dropmcp.memory.store import MemoryStore
 from dropmcp.memory.vocabulary import resolve_vocabulary
 
@@ -14,5 +15,7 @@ def register_memory(mcp: FastMCP, settings: Settings) -> None:
     if not settings.memory_enabled:
         return
     store = settings.memory_store or MemoryStore(settings.database_url)
+    if settings.memory_store is None:
+        check_memory_schema(store.engine)
     vocabulary = resolve_vocabulary(settings.memory_vocabulary)
     mcp.add_provider(MemoryProvider(store, settings, vocabulary))

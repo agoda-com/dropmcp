@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import os
+import uuid
+from collections.abc import Iterator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from typing import Any
@@ -10,13 +13,15 @@ import httpx
 import pytest
 from fastmcp import Client
 from fastmcp.client.transports import StreamableHttpTransport
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, make_url, text
 from sqlalchemy.engine import Engine
 
 from dropmcp.config import Settings
+from dropmcp.memory.schema_check import memory_sql
 from dropmcp.server import build_server
 
 USER_EMAIL = "agent@example.com"
+POSTGRES_URL_ENV = "DROPMCP_TEST_POSTGRES_URL"
 
 
 @dataclass
@@ -58,14 +63,50 @@ class MemoryClient:
         return result.content[0].text
 
 
-@pytest.fixture(params=["sqlite"])
+@pytest.fixture(params=["sqlite", "postgres"])
 def backend(request) -> str:
+    if request.param == "postgres" and not os.environ.get(POSTGRES_URL_ENV):
+        pytest.skip(f"set {POSTGRES_URL_ENV} to run Postgres memory tests")
     return request.param
 
 
+@pytest.fixture(scope="session")
+def postgres_admin() -> Iterator[Engine]:
+    engine = create_engine(os.environ[POSTGRES_URL_ENV], future=True)
+    yield engine
+    engine.dispose()
+
+
 @pytest.fixture
-def database_url(backend, tmp_path) -> str:
-    return f"sqlite:///{tmp_path / 'memory.db'}"
+def database_url(request, backend, tmp_path) -> Iterator[str]:
+    """A fresh database per test: a SQLite file, or a Postgres schema built
+    from the shipped reference SQL and selected through ``search_path``."""
+    if backend == "sqlite":
+        yield f"sqlite:///{tmp_path / 'memory.db'}"
+        return
+    admin: Engine = request.getfixturevalue("postgres_admin")
+    schema = f"mem_{uuid.uuid4().hex}"
+    with admin.begin() as conn:
+        conn.exec_driver_sql(f'CREATE SCHEMA "{schema}"')
+        conn.exec_driver_sql(f'SET LOCAL search_path TO "{schema}"')
+        conn.exec_driver_sql(memory_sql())
+    # application_name tags this test's connections so teardown can close the
+    # ones the server's store engine leaves in its pool.
+    url = make_url(os.environ[POSTGRES_URL_ENV]).update_query_dict(
+        {"options": f"-csearch_path={schema}", "application_name": schema}
+    )
+    try:
+        yield url.render_as_string(hide_password=False)
+    finally:
+        with admin.begin() as conn:
+            conn.execute(
+                text(
+                    "SELECT pg_terminate_backend(pid) FROM pg_stat_activity "
+                    "WHERE application_name = :schema"
+                ),
+                {"schema": schema},
+            )
+            conn.exec_driver_sql(f'DROP SCHEMA "{schema}" CASCADE')
 
 
 @pytest.fixture
@@ -76,7 +117,11 @@ def memory_server(tmp_path, database_url):
     prompts.mkdir(exist_ok=True)
 
     @asynccontextmanager
-    async def factory(**overrides: Any):
+    async def factory(*, user_email: str | None = USER_EMAIL, **overrides: Any):
+        """Serve memory over MCP; ``overrides`` go to ``Settings.resolve``.
+
+        ``user_email=None`` calls the tools without the user header.
+        """
         kwargs: dict[str, Any] = {
             "skills": skills,
             "prompts": prompts,
@@ -104,7 +149,7 @@ def memory_server(tmp_path, database_url):
 
         transport = StreamableHttpTransport(
             "http://testserver/mcp",
-            headers={"X-User-Email": USER_EMAIL},
+            headers={settings.user_header: user_email} if user_email else {},
             httpx_client_factory=client_factory,
         )
         engine = create_engine(settings.database_url, future=True)
