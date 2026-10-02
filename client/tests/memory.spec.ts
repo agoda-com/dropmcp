@@ -7,7 +7,7 @@ import {
   MOCK_MEMORY_STATS,
   MOCK_SERVER,
 } from './fixtures';
-import type { MemoryListItem } from '../src/api/memory';
+import type { MemoryListItem, MemoryReport } from '../src/api/memory';
 
 function mockCatalogApi(page: Page) {
   return page.route('**/catalog', (route) => {
@@ -64,8 +64,12 @@ function facets(items: MemoryListItem[]) {
   };
 }
 
-function mockMemoryApi(page: Page) {
-  const state = MOCK_MEMORIES.map((item) => ({ ...item }));
+function mockMemoryApi(
+  page: Page,
+  memories: MemoryListItem[] = MOCK_MEMORIES,
+  reports: MemoryReport[] = MOCK_MEMORY_REPORTS,
+) {
+  const state = memories.map((item) => ({ ...item }));
   return page.route('**/api/memory**', (route) => {
     const request = route.request();
     const url = new URL(request.url());
@@ -83,7 +87,7 @@ function mockMemoryApi(page: Page) {
       return route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify({ items: MOCK_MEMORY_REPORTS }),
+        body: JSON.stringify({ items: reports }),
       });
     }
 
@@ -93,7 +97,7 @@ function mockMemoryApi(page: Page) {
         contentType: 'application/json',
         body: JSON.stringify({
           items: filterMemories(state, url.searchParams),
-          ...facets(MOCK_MEMORIES),
+          ...facets(memories),
         }),
       });
     }
@@ -123,7 +127,7 @@ function mockMemoryApi(page: Page) {
         contentType: 'application/json',
         body: JSON.stringify({
           memory: { ...MOCK_MEMORY_DETAIL, ...item },
-          reports: MOCK_MEMORY_REPORTS.filter((report) => report.memory_key === key),
+          reports: reports.filter((report) => report.memory_key === key),
         }),
       });
     }
@@ -180,5 +184,66 @@ test.describe('Memory page', () => {
     await expect(page.getByRole('button', { name: 'Validation stays HTTP 200' })).toHaveCount(0);
     await expect(page.getByRole('region', { name: 'Memory details' })).toHaveCount(0);
     await expect(page.getByText('No memories.')).toBeVisible();
+  });
+
+  test('renders memories, recall stats and open reports', async ({ page }) => {
+    await mockCatalogApi(page);
+    await mockMemoryApi(page);
+    await page.goto('/memory');
+    await expect(page.getByRole('article', { name: 'Last 7 days' })).toContainText('50%');
+    await expect(page.getByRole('button', { name: 'Validation stays HTTP 200' })).toBeVisible();
+    await expect(page.getByText('Retries are not always safe.')).toBeVisible();
+    await expect(page).toHaveScreenshot('memory-list.png', { fullPage: true });
+  });
+
+  test('shows empty states when there are no memories or reports', async ({ page }) => {
+    await mockCatalogApi(page);
+    await mockMemoryApi(page, [], []);
+    await page.goto('/memory');
+    await expect(page.getByText('No memories.')).toBeVisible();
+    await expect(page.getByText('No open reports.')).toBeVisible();
+    await expect(page).toHaveScreenshot('memory-empty.png', { fullPage: true });
+  });
+
+  test('filters to hidden memories', async ({ page }) => {
+    await mockCatalogApi(page);
+    await mockMemoryApi(page);
+    await page.goto('/memory');
+    await expect(page.getByRole('button', { name: 'Validation stays HTTP 200' })).toBeVisible();
+    await page.getByRole('group', { name: 'Visibility' }).getByRole('button', { name: 'Hidden' }).click();
+    await expect(page.getByText('Validation stays HTTP 200')).toBeHidden();
+    await expect(page.getByText('Ledger rounds half away from zero')).toBeVisible();
+    await expect(page).toHaveScreenshot('memory-filtered-hidden.png', { fullPage: true });
+  });
+
+  test('shows the details panel for a selected memory', async ({ page }) => {
+    await mockCatalogApi(page);
+    await mockMemoryApi(page);
+    await page.goto('/memory');
+    await page.getByRole('button', { name: 'Validation stays HTTP 200' }).click();
+    const details = page.getByRole('region', { name: 'Memory details' });
+    await expect(details).toContainText('The status is now 422.');
+    await expect(page).toHaveScreenshot('memory-details.png', { fullPage: true });
+  });
+
+  test('asks for confirmation before deleting', async ({ page }) => {
+    await mockCatalogApi(page);
+    await mockMemoryApi(page);
+    await page.goto('/memory');
+    await page.getByRole('button', { name: 'Validation stays HTTP 200' }).click();
+    const details = page.getByRole('region', { name: 'Memory details' });
+    await details.getByRole('button', { name: 'Delete' }).click();
+    await expect(details.getByText('Delete this memory?')).toBeVisible();
+    await expect(details).toHaveScreenshot('memory-delete-confirm.png');
+  });
+
+  test('renders correctly in dark mode', async ({ page }) => {
+    await page.emulateMedia({ colorScheme: 'dark' });
+    await mockCatalogApi(page);
+    await mockMemoryApi(page);
+    await page.goto('/memory');
+    await expect(page.getByRole('button', { name: 'Validation stays HTTP 200' })).toBeVisible();
+    await expect(page.getByText('Retries are not always safe.')).toBeVisible();
+    await expect(page).toHaveScreenshot('memory-list-dark.png', { fullPage: true });
   });
 });
