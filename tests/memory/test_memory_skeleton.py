@@ -145,7 +145,7 @@ async def test_report_with_mangled_key_is_stored_unkeyed(memory_server):
         assert report["reported_key"] == mangled
         assert report["described_memory"] == "Said validation failures return HTTP 200"
         assert report["context"] == {"repo": "example-org/payments-api"}
-        assert report["candidate_keys"] == []
+        assert key in report["candidate_keys"]
         assert _memory_row(mem, key)["hidden_at"] is None
 
 
