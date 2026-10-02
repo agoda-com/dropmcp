@@ -334,6 +334,7 @@ def _report_view(report: dict[str, Any], memory_key: str | None) -> dict[str, An
         "candidate_keys": keys,
         "candidate_keys_label": ", ".join(keys) if keys else None,
         "keyed": memory_key is not None,
+        "link_label": memory_key or "Unkeyed",
         "created_at": report.get("created_at"),
         "display_created_at": _display_datetime(report.get("created_at")),
     }
